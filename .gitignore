@@ -2,9 +2,21 @@ node_modules/
 **/node_modules/
 dist/
 **/dist/
+# Secretos locales — nunca commitear
 .env
+.env.*
+!.env.example
+**/.env
+**/.env.local
+**/.env.*.local
+client/.env.local
+server/.env
 .cache/
 .idea/
 *.log
 **/stitch-export/
 *.timestamp-*
+supabase_schema.sql
+SUPABASE_SETUP.md
+SUPABASE_QUERIES.sql
+SUPABASE_INTEGRATION.md
