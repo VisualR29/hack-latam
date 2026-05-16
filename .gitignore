@@ -2,9 +2,15 @@ node_modules/
 **/node_modules/
 dist/
 **/dist/
+# Secretos locales — nunca commitear
 .env
-.env.local
+.env.*
+!.env.example
+**/.env
+**/.env.local
+**/.env.*.local
 client/.env.local
+server/.env
 .cache/
 .idea/
 *.log
