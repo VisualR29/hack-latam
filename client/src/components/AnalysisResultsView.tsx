@@ -1,39 +1,28 @@
-import { FindingCard, type Finding } from "./FindingCard";
+import { useMemo } from "react";
 
-export type TrafficLight = "green" | "yellow" | "red";
+import { CategoryAccordion } from "./CategoryAccordion";
+import { SecurityScoreHero } from "./SecurityScoreHero";
+import type { AnalysisResult } from "../types/analysis";
+import type { Finding, OwaspId, Severity } from "./FindingCard";
 
-export type AnalysisResult = {
-  riskScore: number;
-  trafficLight: TrafficLight;
-  findings: Finding[];
-  limits: {
-    filesProcessed: number;
-    totalBytesApprox: number;
-    truncated: boolean;
-    warnings: string[];
-  };
-  usedAiExplanation: boolean;
-};
+export type { AnalysisResult, OwaspCategory, TrafficLight } from "../types/analysis";
 
-function summaryCopy(result: AnalysisResult) {
-  const n = result.findings.length;
-  const urgent = result.findings.filter((f) => f.severity === "high").length;
+function countUrgent(result: AnalysisResult) {
+  return result.categories.reduce((sum, c) => sum + c.severitySummary.high, 0);
+}
 
+function summaryCopy(result: AnalysisResult, totalFindings: number, urgent: number) {
   if (result.limits.filesProcessed === 0) {
     return {
       headline: "No pudimos revisar tu código",
       body: "Revisá las advertencias de abajo. Puede ser un problema de conexión con GitHub o que el archivo esté vacío.",
-      statusLabel: "Sin datos",
-      statusClass: "text-on-surface-variant",
     };
   }
 
-  if (n === 0) {
+  if (totalFindings === 0) {
     return {
       headline: "Buenas noticias: no vimos riesgos evidentes",
-      body: "Eso no significa que el proyecto sea 100 % seguro, pero no encontramos patrones preocupantes en lo que analizamos.",
-      statusLabel: "Todo en orden por ahora",
-      statusClass: "text-primary",
+      body: "Tu puntaje de seguridad es alto. Igual conviene revisar el código cuando hagas cambios importantes.",
     };
   }
 
@@ -41,28 +30,22 @@ function summaryCopy(result: AnalysisResult) {
     return {
       headline:
         urgent > 0
-          ? `Encontramos ${urgent} punto${urgent > 1 ? "s" : ""} urgente${urgent > 1 ? "s" : ""}`
-          : "Tu proyecto necesita atención antes de publicarse",
-      body: "Abajo te explicamos cada hallazgo en palabras simples: qué es, por qué importa y qué podés hacer. No hace falta saber programar para entenderlo.",
-      statusLabel: "Requiere acción",
-      statusClass: "text-[#F87171]",
+          ? `Hay ${urgent} punto${urgent > 1 ? "s" : ""} urgente${urgent > 1 ? "s" : ""} por atender`
+          : "Tu app necesita mejoras de seguridad",
+      body: "Abrí cada área de abajo para entender qué encontramos y qué podés hacer, sin tecnicismos innecesarios.",
     };
   }
 
   if (result.trafficLight === "yellow") {
     return {
-      headline: `Hay ${n} punto${n > 1 ? "s" : ""} para revisar`,
-      body: "Nada parece una emergencia inmediata, pero conviene leer las explicaciones y planificar correcciones pronto.",
-      statusLabel: "Revisar pronto",
-      statusClass: "text-[#FACC15]",
+      headline: "Tu app está aceptable, pero hay margen de mejora",
+      body: "Revisá las áreas marcadas y planificá correcciones cuando puedas.",
     };
   }
 
   return {
-    headline: `Detectamos ${n} detalle${n > 1 ? "s" : ""} menor${n > 1 ? "es" : ""}`,
-    body: "Son mejoras recomendables. Cada tarjeta te guía paso a paso sin tecnicismos innecesarios.",
-    statusLabel: "Riesgo bajo",
-    statusClass: "text-primary",
+    headline: "Tu app se ve bastante bien",
+    body: "Hay algunos detalles menores. Cada categoría explica qué significan y cómo mejorarlos.",
   };
 }
 
@@ -72,13 +55,40 @@ type Props = {
 };
 
 export function AnalysisResultsView({ result, onNewAnalysis }: Props) {
-  const summary = summaryCopy(result);
-  const urgentCount = result.findings.filter((f) => f.severity === "high").length;
-  const importantCount = result.findings.filter((f) => f.severity === "medium").length;
-  const filesLabel =
-    result.limits.filesProcessed === 1
-      ? "1 archivo revisado"
-      : `${result.limits.filesProcessed} archivos revisados`;
+  const totalFindings = result.findings.length;
+  const urgentCount = countUrgent(result);
+  const summary = summaryCopy(result, totalFindings, urgentCount);
+
+  const categories = useMemo(() => {
+    if (result.categories.length > 0) return result.categories;
+    const byOwasp = new Map<OwaspId, Finding[]>();
+    for (const f of result.findings) {
+      const list = byOwasp.get(f.owaspId) ?? [];
+      list.push(f);
+      byOwasp.set(f.owaspId, list);
+    }
+    return [...byOwasp.entries()].map(([owaspId, findings]) => {
+      const severitySummary = { high: 0, medium: 0, low: 0 };
+      for (const f of findings) severitySummary[f.severity]++;
+      const order: Record<Severity, number> = { high: 0, medium: 1, low: 2 };
+      const worstSeverity = findings.reduce<Severity>(
+        (w, f) => (order[f.severity] < order[w] ? f.severity : w),
+        "low",
+      );
+      return {
+        owaspId,
+        name: `Área ${owaspId}`,
+        description: "Hallazgos agrupados por tipo de riesgo.",
+        count: findings.length,
+        severitySummary,
+        worstSeverity,
+        findings,
+      };
+    });
+  }, [result.categories, result.findings]);
+
+  const secureScore =
+    result.secureScore ?? Math.max(0, Math.min(100, 100 - (result.riskScore ?? 0)));
 
   return (
     <div className="w-full min-w-0 max-w-5xl mx-auto space-y-lg animate-fade-in pb-xl">
@@ -103,40 +113,22 @@ export function AnalysisResultsView({ result, onNewAnalysis }: Props) {
         )}
       </div>
 
-      <section className="relative bg-surface-container-high rounded-xl p-lg md:p-xl inner-glow border border-outline-variant overflow-hidden">
-        <div className="absolute top-0 right-0 w-48 h-48 bg-primary/10 blur-[80px] rounded-full pointer-events-none" />
-        <div className="relative z-10 w-full space-y-md">
-          <span className={`font-label-caps text-label-caps tracking-widest ${summary.statusClass}`}>
-            {summary.statusLabel}
-          </span>
-          <h2 className="font-headline-lg text-[28px] md:text-headline-lg text-on-surface leading-tight">
-            {summary.headline}
-          </h2>
-          <p className="font-body-md text-body-md text-on-surface-variant leading-relaxed">
+      <SecurityScoreHero
+        secureScore={secureScore}
+        trafficLight={result.trafficLight}
+        totalFindings={totalFindings}
+        totalCategories={categories.length}
+        filesProcessed={result.limits.filesProcessed}
+      />
+
+      {result.limits.filesProcessed > 0 && (
+        <section className="w-full space-y-xs px-sm">
+          <h3 className="font-headline-md text-headline-md text-on-surface">{summary.headline}</h3>
+          <p className="text-[14px] text-on-surface-variant leading-relaxed max-w-3xl">
             {summary.body}
           </p>
-
-          {result.findings.length > 0 && (
-            <div className="flex flex-wrap gap-sm pt-sm">
-              {urgentCount > 0 && (
-                <span className="px-sm py-1 rounded-full bg-[#F87171]/15 text-[#F87171] text-[12px] font-label-caps">
-                  {urgentCount} urgente{urgentCount > 1 ? "s" : ""}
-                </span>
-              )}
-              {importantCount > 0 && (
-                <span className="px-sm py-1 rounded-full bg-[#FACC15]/15 text-[#FACC15] text-[12px] font-label-caps">
-                  {importantCount} importante{importantCount > 1 ? "s" : ""}
-                </span>
-              )}
-              {result.limits.filesProcessed > 0 && (
-                <span className="px-sm py-1 rounded-full bg-surface-container text-on-surface-variant text-[12px]">
-                  {filesLabel}
-                </span>
-              )}
-            </div>
-          )}
-        </div>
-      </section>
+        </section>
+      )}
 
       {result.limits.warnings.length > 0 && (
         <section
@@ -167,18 +159,18 @@ export function AnalysisResultsView({ result, onNewAnalysis }: Props) {
       <section className="w-full min-w-0 space-y-md">
         <div className="w-full">
           <h3 className="font-headline-md text-headline-md text-on-surface flex items-center gap-xs">
-            <span className="material-symbols-outlined text-primary shrink-0" data-icon="school">
-              school
+            <span className="material-symbols-outlined text-primary shrink-0" data-icon="category">
+              category
             </span>
-            Aprendé qué significa cada alerta
+            Problemas por área de seguridad
           </h3>
           <p className="text-[14px] text-on-surface-variant mt-xs w-full max-w-3xl leading-relaxed">
-            Cada tarjeta responde: qué encontramos, por qué te importa, qué podría pasar y qué
-            hacer. Los detalles de código son opcionales.
+            Cada bloque agrupa alertas del mismo tipo. Tocá una categoría para ver el detalle de
+            cada problema y qué podés hacer.
           </p>
         </div>
 
-        {result.findings.length === 0 && result.limits.filesProcessed > 0 ? (
+        {categories.length === 0 && result.limits.filesProcessed > 0 ? (
           <div className="py-xl text-center rounded-xl border border-outline-variant bg-surface-container-low">
             <span
               className="material-symbols-outlined text-[48px] text-primary mb-md block mx-auto"
@@ -187,20 +179,18 @@ export function AnalysisResultsView({ result, onNewAnalysis }: Props) {
               verified_user
             </span>
             <p className="text-on-surface font-headline-md">No hay alertas que mostrar</p>
-            <p className="text-on-surface-variant text-[14px] mt-xs max-w-md mx-auto">
+            <p className="text-on-surface-variant text-[14px] mt-xs w-full max-w-md mx-auto">
               Seguí buenas prácticas al desplegar y volvé a escanear cuando cambies algo
               importante.
             </p>
           </div>
-        ) : result.findings.length > 0 ? (
-          <div className="grid w-full min-w-0 grid-cols-1 md:grid-cols-2 gap-md md:gap-lg">
-            {result.findings.map((finding) => (
-              <div key={finding.id} className="min-w-0 w-full">
-                <FindingCard finding={finding} />
-              </div>
+        ) : (
+          <div className="space-y-md">
+            {categories.map((cat, index) => (
+              <CategoryAccordion key={cat.owaspId} category={cat} defaultOpen={index === 0} />
             ))}
           </div>
-        ) : null}
+        )}
       </section>
 
       <p className="text-[12px] text-outline text-center w-full max-w-2xl mx-auto px-sm leading-relaxed">

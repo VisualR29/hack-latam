@@ -251,10 +251,20 @@ export default function App() {
         );
       });
 
+      if (payload.categories?.length) {
+        for (const cat of payload.categories) {
+          cat.findings.sort((a, b) => {
+            const order: Record<Severity, number> = { high: 0, medium: 1, low: 2 };
+            return order[a.severity] - order[b.severity] || a.title.localeCompare(b.title, "es");
+          });
+        }
+      }
+
       clientLog.info("analyze.success", "Análisis recibido", {
         ms: elapsed(),
         findings: payload.findings.length,
-        riskScore: payload.riskScore,
+        categories: payload.categories?.length ?? 0,
+        secureScore: payload.secureScore,
         trafficLight: payload.trafficLight,
         usedAiExplanation: payload.usedAiExplanation,
       });
@@ -275,7 +285,13 @@ export default function App() {
           return next;
         });
 
-        const note: Notification = { id: String(Date.now() + 1), title: `Análisis completado — ${payload.riskScore}%`, ts: Date.now(), body: `${payload.findings.length} hallazgos` };
+        const score = payload.secureScore ?? 100 - payload.riskScore;
+        const note: Notification = {
+          id: String(Date.now() + 1),
+          title: `Análisis completado — seguridad ${score}/100`,
+          ts: Date.now(),
+          body: `${payload.findings.length} alertas en ${payload.categories?.length ?? 0} áreas`,
+        };
         setNotifications((prev) => {
           const n = [note, ...prev].slice(0, 50);
           localStorage.setItem('vg_notifications', JSON.stringify(n));
@@ -535,7 +551,7 @@ export default function App() {
                   <button key={h.id} className="w-full text-left p-sm rounded hover:bg-surface-container-high border border-outline-variant flex items-center justify-between" onClick={() => { setResult(h); setShowHistory(false); }}>
                     <div>
                       <div className="font-label-caps text-[12px]">{h.label ?? h.tab}</div>
-                      <div className="text-[13px] text-on-surface-variant">{new Date(h.timestamp).toLocaleString()} — {h.riskScore}%</div>
+                      <div className="text-[13px] text-on-surface-variant">{new Date(h.timestamp).toLocaleString()} — seguridad {h.secureScore ?? 100 - h.riskScore}/100</div>
                     </div>
                     <div className="text-[12px] font-label-caps text-on-surface-variant">{h.findings.length} hallazgos</div>
                   </button>
