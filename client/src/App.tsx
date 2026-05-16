@@ -5,6 +5,15 @@ import {
   type AnalysisResult,
 } from "./components/AnalysisResultsView";
 import { ANALYZE_URL } from "./config";
+import {
+  getCurrentSession,
+  listGithubRepos,
+  signInWithGitHub,
+  signOut,
+  supabase,
+  upsertUserProfile,
+  updateLastLogin,
+} from "./services/supabase-client";
 import { clientLog, clientTimer } from "./util/logger";
 import type { Severity } from "./components/FindingCard";
 type Tab = "raw" | "zip" | "github";
@@ -22,27 +31,58 @@ type Settings = {
 
 type User = {
   email: string;
+  provider?: string;
+  displayName?: string | null;
+  avatarUrl?: string | null;
 };
 
-type Notification = {
+type SessionUser = {
   id: string;
-  title: string;
-  body?: string;
-  ts: number;
+  email?: string | null;
+  app_metadata?: { provider?: string };
+  user_metadata?: Record<string, any>;
 };
 
-function LoginForm({ onLogin }: { onLogin: (u: User) => void }) {
+function LoginForm({
+  onLogin,
+  onGitHubLogin,
+  gitHubLoading,
+}: {
+  onLogin: (u: User) => void;
+  onGitHubLogin: () => Promise<void>;
+  gitHubLoading: boolean;
+}) {
   const [email, setEmail] = useState("");
   return (
-    <form onSubmit={(e) => { e.preventDefault(); if (email.trim()) onLogin({ email: email.trim() }); }} className="space-y-md">
-      <div>
-        <label className="font-label-caps text-[12px]">Email</label>
-        <input className="w-full mt-xs px-sm py-xs rounded border border-outline-variant bg-surface-container-high" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@company.com" />
+    <div className="space-y-md">
+      <button
+        type="button"
+        onClick={onGitHubLogin}
+        disabled={gitHubLoading}
+        className="w-full flex items-center justify-center gap-sm bg-surface-container-high border border-outline-variant text-on-surface px-md py-xs rounded font-bold hover:bg-surface-container-highest transition-colors"
+      >
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v 3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" />
+        </svg>
+        {gitHubLoading ? "Conectando..." : "Conectar con GitHub"}
+      </button>
+      
+      <div className="relative flex items-center my-md">
+        <div className="flex-grow border-t border-outline-variant"></div>
+        <span className="px-sm text-on-surface-variant text-[12px]">o</span>
+        <div className="flex-grow border-t border-outline-variant"></div>
       </div>
-      <div className="flex justify-end">
-        <button className="bg-primary text-on-primary px-md py-xs rounded font-bold">Iniciar sesión</button>
-      </div>
-    </form>
+
+      <form onSubmit={(e) => { e.preventDefault(); if (email.trim()) onLogin({ email: email.trim() }); }} className="space-y-md">
+        <div>
+          <label className="font-label-caps text-[12px]">Email</label>
+          <input className="w-full mt-xs px-sm py-xs rounded border border-outline-variant bg-surface-container-high" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@company.com" />
+        </div>
+        <div className="flex justify-end">
+          <button className="bg-primary text-on-primary px-md py-xs rounded font-bold">Iniciar sesión</button>
+        </div>
+      </form>
+    </div>
   );
 }
 
@@ -50,7 +90,11 @@ export default function App() {
   const [tab, setTab] = useState<Tab>("raw");
   const [code, setCode] = useState("");
   const [filename, setFilename] = useState("fragmento.tsx");
-  const [repoUrl, setRepoUrl] = useState("https://github.com/expressjs/express");
+  const [repoUrl, setRepoUrl] = useState("");
+  const [githubRepos, setGithubRepos] = useState<any[]>([]);
+  const [selectedGithubRepo, setSelectedGithubRepo] = useState<string | null>(null);
+  const [githubReposLoading, setGithubReposLoading] = useState(false);
+  const [githubReposError, setGithubReposError] = useState<string | null>(null);
   const [zipFile, setZipFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -60,18 +104,18 @@ export default function App() {
   const [showHistory, setShowHistory] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
-  const [showNotifications, setShowNotifications] = useState(false);
 
   // Refs for click-outside handling
   const historyRef = useRef<HTMLDivElement | null>(null);
   const settingsRef = useRef<HTMLDivElement | null>(null);
   const loginRef = useRef<HTMLDivElement | null>(null);
-  const notificationsRef = useRef<HTMLDivElement | null>(null);
 
   const [history, setHistory] = useState<StoredAnalysis[]>([]);
   const [settings, setSettings] = useState<Settings>({ persistHistory: true });
   const [user, setUser] = useState<User | null>(null);
-  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [gitHubLoading, setGitHubLoading] = useState(false);
+  const [gitHubAccessToken, setGitHubAccessToken] = useState<string | null>(null);
+  const [showAccountMenu, setShowAccountMenu] = useState(false);
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     try {
       const saved = localStorage.getItem('vg_theme');
@@ -105,16 +149,121 @@ export default function App() {
       const raw = localStorage.getItem('vg_user');
       if (raw) setUser(JSON.parse(raw));
     } catch (e) {}
-    try {
-      const raw = localStorage.getItem('vg_notifications');
-      if (raw) setNotifications(JSON.parse(raw));
-    } catch (e) {}
     // apply theme class
     try {
       document.documentElement.classList.toggle('dark', theme === 'dark');
       document.documentElement.classList.toggle('light', theme === 'light');
     } catch (e) {}
   }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    async function syncSupabaseUser(sessionUser: SessionUser, providerToken?: string | null) {
+      const email = sessionUser.email ?? `${sessionUser.id}@github.local`;
+      const githubUsername =
+        sessionUser.user_metadata?.user_name ??
+        sessionUser.user_metadata?.preferred_username ??
+        sessionUser.user_metadata?.name ??
+        sessionUser.email?.split('@')[0] ??
+        null;
+      const avatarUrl = sessionUser.user_metadata?.avatar_url ?? null;
+
+      const nextUser: User = {
+        email,
+        provider: sessionUser.app_metadata?.provider,
+        displayName: githubUsername,
+        avatarUrl,
+      };
+
+      setUser(nextUser);
+      localStorage.setItem('vg_user', JSON.stringify(nextUser));
+      setGitHubAccessToken(providerToken ?? null);
+
+      await upsertUserProfile(sessionUser.id, {
+        email,
+        github_username: githubUsername ?? undefined,
+        avatar_url: avatarUrl ?? undefined,
+        last_login: new Date().toISOString(),
+        is_active: true,
+      });
+      await updateLastLogin(sessionUser.id);
+    }
+
+    async function restoreSession() {
+      try {
+        const session = await getCurrentSession();
+        if (!active || !session?.user) return;
+
+        await syncSupabaseUser(session.user as SessionUser, (session as any)?.provider_token ?? null);
+        setShowLogin(false);
+      } catch (e) {
+        // Si Supabase todavía no está configurado, mantenemos el fallback local.
+      }
+    }
+
+    void restoreSession();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_OUT' || !session?.user) {
+        setUser(null);
+        setGitHubAccessToken(null);
+        setShowLogin(false);
+        setShowAccountMenu(false);
+        try {
+          localStorage.removeItem('vg_user');
+        } catch (e) {}
+        return;
+      }
+      if (session?.user) {
+        void syncSupabaseUser(session.user as SessionUser, (session as any)?.provider_token ?? null)
+          .then(() => setShowLogin(false))
+          .catch((error) => {
+            setError(error instanceof Error ? error.message : 'No se pudo sincronizar el usuario con Supabase.');
+          });
+      }
+    });
+
+    return () => {
+      active = false;
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  // Load GitHub repos when switching to github tab and having an access token
+  useEffect(() => {
+    let mounted = true;
+    async function loadRepos() {
+      if (!gitHubAccessToken) return;
+      try {
+        setGithubReposLoading(true);
+        setGithubReposError(null);
+        const repos = await listGithubRepos(gitHubAccessToken);
+        if (!mounted) return;
+        setGithubRepos(repos || []);
+        if (repos && repos.length > 0) {
+          const firstRepo = repos[0];
+          setSelectedGithubRepo(
+            firstRepo.html_url ?? (firstRepo.full_name ? `https://github.com/${firstRepo.full_name}` : firstRepo.url ?? null),
+          );
+        } else {
+          setSelectedGithubRepo(null);
+        }
+      } catch (err) {
+        if (!mounted) return;
+        setGithubReposError(err instanceof Error ? err.message : 'No se pudieron cargar los repositorios de GitHub.');
+        console.error('No se pudieron cargar repositorios de GitHub:', err);
+      } finally {
+        if (mounted) setGithubReposLoading(false);
+      }
+    }
+
+    if (tab === 'github' && gitHubAccessToken && githubRepos.length === 0) {
+      void loadRepos();
+    }
+
+    return () => { mounted = false; };
+  }, [tab, gitHubAccessToken, githubRepos.length]);
 
   // Close panels when clicking outside them
   useEffect(() => {
@@ -134,13 +283,10 @@ export default function App() {
       if (showLogin && loginRef.current && !loginRef.current.contains(target)) {
         setShowLogin(false);
       }
-      if (showNotifications && notificationsRef.current && !notificationsRef.current.contains(target)) {
-        setShowNotifications(false);
-      }
     }
     document.addEventListener('mousedown', onDocClick);
     return () => document.removeEventListener('mousedown', onDocClick);
-  }, [showHistory, showSettings, showLogin, showNotifications]);
+  }, [showHistory, showSettings, showLogin]);
 
   useEffect(() => {
     try {
@@ -152,6 +298,31 @@ export default function App() {
 
   function toggleTheme() {
     setTheme((t) => (t === 'dark' ? 'light' : 'dark'));
+  }
+
+  async function handleGitHubLogin() {
+    try {
+      setGitHubLoading(true);
+      setError(null);
+      await signInWithGitHub();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo iniciar sesión con GitHub.');
+      setGitHubLoading(false);
+    }
+  }
+
+  async function handleSignOut() {
+    try {
+      await signOut();
+    } finally {
+      setUser(null);
+      setGitHubAccessToken(null);
+      setShowLogin(false);
+      setShowAccountMenu(false);
+      try {
+        localStorage.removeItem('vg_user');
+      } catch (e) {}
+    }
   }
 
   async function onSubmit(event?: FormEvent) {
@@ -204,11 +375,14 @@ export default function App() {
           }),
         });
       } else {
-        if (!repoUrl.trim()) throw new Error("Pega primero una URL válida.");
+        // prefer selected repo from authenticated user's repos
+        const targetUrl = selectedGithubRepo ?? repoUrl;
+        if (!targetUrl || !targetUrl.trim()) throw new Error("Selecciona un repositorio de GitHub o pega una URL válida.");
 
         clientLog.debug("analyze.request", "POST github", {
           url: ANALYZE_URL,
-          repoUrl: repoUrl.trim(),
+          repoUrl: targetUrl.trim(),
+          hasGitHubToken: Boolean(gitHubAccessToken),
         });
 
         response = await fetch(ANALYZE_URL, {
@@ -216,7 +390,8 @@ export default function App() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             mode: "github",
-            url: repoUrl.trim(),
+            url: targetUrl.trim(),
+            githubToken: gitHubAccessToken ?? undefined,
           }),
         });
       }
@@ -277,7 +452,7 @@ export default function App() {
           id: String(Date.now()),
           timestamp: Date.now(),
           tab,
-          label: tab === 'raw' ? filename : tab === 'github' ? repoUrl : zipFile?.name,
+          label: tab === 'raw' ? filename : tab === 'github' ? (selectedGithubRepo ?? repoUrl) : zipFile?.name,
         };
         setHistory((prev) => {
           const next = [item, ...prev].slice(0, 50);
@@ -285,18 +460,6 @@ export default function App() {
           return next;
         });
 
-        const score = payload.secureScore ?? 100 - payload.riskScore;
-        const note: Notification = {
-          id: String(Date.now() + 1),
-          title: `Análisis completado — seguridad ${score}/100`,
-          ts: Date.now(),
-          body: `${payload.findings.length} alertas en ${payload.categories?.length ?? 0} áreas`,
-        };
-        setNotifications((prev) => {
-          const n = [note, ...prev].slice(0, 50);
-          localStorage.setItem('vg_notifications', JSON.stringify(n));
-          return n;
-        });
       } catch (e) {
         // ignore
       }
@@ -346,13 +509,22 @@ export default function App() {
             <span className="font-label-caps text-label-caps">Historial de Seguridad</span>
           </a>
         </nav>
-        <div className="mt-auto px-xs flex items-center gap-sm pt-md border-t border-outline-variant">
-          <div className="w-8 h-8 rounded-full bg-surface-variant flex items-center justify-center overflow-hidden border border-outline-variant">
-            <span className="material-symbols-outlined text-outline">person</span>
-          </div>
-          <div className="flex flex-col">
-            <span className="font-label-caps text-[11px] text-on-surface">Sesión de Administrador</span>
-            <span className="font-body-md text-[12px] text-on-surface-variant">{user?.email ?? "security@vibeguard.io"}</span>
+        <div className="mt-auto px-xs pt-md border-t border-outline-variant">
+          <div className="flex items-center gap-sm">
+            <div className="w-9 h-9 rounded-full bg-surface-variant flex items-center justify-center overflow-hidden border border-outline-variant shrink-0">
+              {user?.avatarUrl ? (
+                <img src={user.avatarUrl} alt={user.displayName ?? user.email} className="w-full h-full object-cover" />
+              ) : (
+                <span className="material-symbols-outlined text-outline">person</span>
+              )}
+            </div>
+            <div className="flex flex-col min-w-0">
+              <span className="font-label-caps text-[11px] text-on-surface">{user ? "Sesión activa" : "Sesión no iniciada"}</span>
+              <span className="font-body-md text-[12px] text-on-surface-variant truncate">
+                {user ? (user.displayName ?? user.email) : "Iniciá sesión para conectar repos"}
+              </span>
+              {user?.provider && <span className="text-[11px] text-on-surface-variant/80">{user.provider}</span>}
+            </div>
           </div>
         </div>
       </aside>
@@ -371,13 +543,42 @@ export default function App() {
               <button data-no-close onClick={toggleTheme} title={theme === 'dark' ? 'Cambiar a claro' : 'Cambiar a oscuro'} className="material-symbols-outlined text-on-surface hover:text-primary transition-colors scale-95 active:scale-90">
                 {theme === 'dark' ? 'light_mode' : 'dark_mode'}
               </button>
-              <button data-no-close onClick={() => setShowNotifications((s) => !s)} className="material-symbols-outlined text-on-surface hover:text-primary transition-colors scale-95 active:scale-90" data-icon="notifications">notifications</button>
               <button data-no-close onClick={() => setShowSettings(true)} className="material-symbols-outlined text-on-surface hover:text-primary transition-colors scale-95 active:scale-90" data-icon="settings">settings</button>
             </div>
-            <div className="w-8 h-8 rounded-full bg-surface-variant border border-outline-variant overflow-hidden hidden md:block">
-              <button data-no-close className="w-full h-full flex items-center justify-center" onClick={() => setShowLogin(true)}>
-                <span className="material-symbols-outlined text-outline">person</span>
+            <div className="relative hidden md:block">
+              <button
+                data-no-close
+                className="w-8 h-8 rounded-full bg-surface-variant border border-outline-variant overflow-hidden flex items-center justify-center"
+                onClick={() => (user ? setShowAccountMenu((value) => !value) : setShowLogin(true))}
+              >
+                {user?.avatarUrl ? (
+                  <img src={user.avatarUrl} alt={user.displayName ?? user.email} className="w-full h-full object-cover" />
+                ) : (
+                  <span className="material-symbols-outlined text-outline">{user ? "account_circle" : "person"}</span>
+                )}
               </button>
+
+              {user && showAccountMenu && (
+                <div data-no-close className="absolute right-0 mt-sm w-64 rounded-lg border border-outline-variant bg-surface-container shadow-lg p-sm z-60">
+                  <div className="flex items-center gap-sm pb-sm border-b border-outline-variant">
+                    <div className="w-10 h-10 rounded-full bg-surface-variant flex items-center justify-center overflow-hidden border border-outline-variant shrink-0">
+                      {user.avatarUrl ? (
+                        <img src={user.avatarUrl} alt={user.displayName ?? user.email} className="w-full h-full object-cover" />
+                      ) : (
+                        <span className="material-symbols-outlined text-outline">person</span>
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="font-label-caps text-[11px] text-on-surface">{user.displayName ?? "Cuenta conectada"}</div>
+                      <div className="text-[12px] text-on-surface-variant truncate">{user.email}</div>
+                    </div>
+                  </div>
+                  <div className="pt-sm flex items-center justify-between gap-sm">
+                    <span className="text-[12px] text-on-surface-variant">{user.provider ? `Proveedor: ${user.provider}` : "Sesión local"}</span>
+                    <button className="text-[12px] font-bold text-error" onClick={handleSignOut}>Salir</button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </header>
@@ -472,15 +673,31 @@ export default function App() {
                   {tab === 'github' && (
                     <div className="space-y-md animate-fade-in">
                       <div className="flex flex-col sm:flex-row items-center gap-sm">
-                        <input
-                          className="flex-1 w-full bg-surface-container-high border border-outline-variant rounded-lg px-md py-sm font-code-sm text-code-sm text-on-surface focus:outline-none focus:border-primary"
-                          placeholder="https://github.com/usuario/repositorio"
-                          type="url"
-                          value={repoUrl}
-                          onChange={(e) => setRepoUrl(e.target.value)}
-                        />
+                        {githubReposLoading ? (
+                          <div className="flex-1 w-full bg-surface-container-high border border-outline-variant rounded-lg px-md py-sm text-on-surface-variant">Cargando repositorios de GitHub...</div>
+                        ) : githubRepos.length > 0 ? (
+                          <select className="flex-1 w-full bg-surface-container-high border border-outline-variant rounded-lg px-md py-sm font-code-sm text-code-sm text-on-surface focus:outline-none" value={selectedGithubRepo ?? ''} onChange={(e) => setSelectedGithubRepo(e.target.value)}>
+                            {githubRepos.map((r) => (
+                              <option key={r.id} value={r.html_url ?? (r.full_name ? `https://github.com/${r.full_name}` : r.url)}>{r.full_name ?? r.name}</option>
+                            ))}
+                          </select>
+                        ) : (
+                          <input
+                            className="flex-1 w-full bg-surface-container-high border border-outline-variant rounded-lg px-md py-sm font-code-sm text-code-sm text-on-surface focus:outline-none focus:border-primary"
+                            placeholder="https://github.com/usuario/repositorio"
+                            type="url"
+                            value={repoUrl}
+                            onChange={(e) => setRepoUrl(e.target.value)}
+                          />
+                        )}
                       </div>
-                      <p className="font-body-md text-[12px] text-on-surface-variant italic">Solo se soportan repositorios públicos en el Nivel Gratuito.</p>
+                      {githubReposError && (
+                        <p className="text-[12px] text-error">{githubReposError}</p>
+                      )}
+                      {!githubReposLoading && gitHubAccessToken && githubRepos.length === 0 && !githubReposError && (
+                        <p className="text-[12px] text-on-surface-variant">No se pudieron cargar repositorios. Pega una URL válida para analizarla manualmente.</p>
+                      )}
+                      <p className="font-body-md text-[12px] text-on-surface-variant italic">Si te conectaste con GitHub verás tus repositorios privados y públicos aquí.</p>
                     </div>
                   )}
 
@@ -513,6 +730,7 @@ export default function App() {
               </div>
             </div>
           ) : (
+
             <AnalysisResultsView
               result={result}
               onNewAnalysis={() => setResult(null)}
@@ -598,26 +816,11 @@ export default function App() {
               <h3 className="font-headline-md">Iniciar Sesión</h3>
               <button className="text-on-surface-variant" onClick={() => setShowLogin(false)}>Cerrar</button>
             </div>
-            <LoginForm onLogin={(u) => { setUser(u); localStorage.setItem('vg_user', JSON.stringify(u)); setShowLogin(false); }} />
-          </div>
-        </div>
-      )}
-
-      {showNotifications && (
-        <div ref={notificationsRef} className="fixed right-4 top-16 w-80 bg-surface-container p-sm rounded border border-outline-variant shadow-lg z-60">
-          <div className="flex items-center justify-between mb-xs">
-            <div className="font-label-caps text-[12px]">Notificaciones</div>
-            <button className="text-on-surface-variant text-[12px]" onClick={() => { setNotifications([]); localStorage.removeItem('vg_notifications'); }}>Limpiar</button>
-          </div>
-          <div className="space-y-xs max-h-64 overflow-y-auto">
-            {notifications.length === 0 && <div className="text-on-surface-variant">No hay notificaciones.</div>}
-            {notifications.map(n => (
-              <div key={n.id} className="p-xs rounded hover:bg-surface-container-high border border-outline-variant">
-                <div className="font-body-md">{n.title}</div>
-                <div className="text-[12px] text-on-surface-variant">{n.body}</div>
-                <div className="text-[11px] text-on-surface-variant mt-xs">{new Date(n.ts).toLocaleTimeString()}</div>
-              </div>
-            ))}
+            <LoginForm
+              onLogin={(u) => { setUser(u); localStorage.setItem('vg_user', JSON.stringify(u)); setShowLogin(false); }}
+              onGitHubLogin={handleGitHubLogin}
+              gitHubLoading={gitHubLoading}
+            />
           </div>
         </div>
       )}

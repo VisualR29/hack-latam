@@ -3,8 +3,14 @@ node_modules/
 dist/
 **/dist/
 .env
+.env.local
+client/.env.local
 .cache/
 .idea/
 *.log
 **/stitch-export/
 *.timestamp-*
+supabase_schema.sql
+SUPABASE_SETUP.md
+SUPABASE_QUERIES.sql
+SUPABASE_INTEGRATION.md
