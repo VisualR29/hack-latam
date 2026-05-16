@@ -120,7 +120,7 @@ const RULES: AuthFailureRule[] = [
     severity: "medium",
     owaspId: "A07",
     langs: /\.(ts|tsx|js)$/i,
-    regex: /(?:app\.|router\.)\s*(?:post|put|delete|patch)\s*\([^)]*\)[\s\S]{0,200}(?=handler|{)(?![\s\S]{0,300}(?:csrf|CSRF|csrfProtection|validateCSRFToken|token.*verify|req\.csrfToken))/gi,
+    regex: /(?:app\.|router\.)\s*(?:post|put|delete|patch)\s*\([^)]*\)[\s\S]{0,200}(?=handler|{)(?![\s\S]{0,300}(?:csrf|CSRF|csrfProtection|validateCSRFToken|token.*verify|req\.csrfToken|Bearer|authorization))/gi,
     description: () =>
       "Endpoints de mutación (POST, PUT, DELETE) sin validación de CSRF token.",
     fixRecommendation:
@@ -174,8 +174,15 @@ export function runAuthFailuresEngine(files: FileSnapshot[]): Finding[] {
   const out: Finding[] = [];
 
   for (const file of files) {
+    // Si el archivo usa Bearer token auth, CSRF no aplica
+    // (CSRF solo es relevante con cookies de sesión automáticas)
+    const usesBearerAuth = /Bearer\s|authorization.*header|req\.headers\.authorization|jwt\.sign|jwt\.verify/i.test(file.content);
+
     for (const rule of RULES) {
       if (rule.langs && !rule.langs.test(file.path.replace(/\\/g, "/"))) continue;
+
+      // Skip CSRF check for Bearer-token-based apps
+      if (rule.ruleId === "AUTHFAIL_NO_CSRF_PROTECTION" && usesBearerAuth) continue;
 
       const re = new RegExp(rule.regex.source, rule.regex.flags.includes("g") ? rule.regex.flags : `${rule.regex.flags}g`);
 
@@ -184,6 +191,12 @@ export function runAuthFailuresEngine(files: FileSnapshot[]): Finding[] {
         const idx = m.index;
         const { line, column } = lineAndColumn(file.content, idx);
         const snippet = file.content.slice(idx, idx + 100).replace(/\s+/g, " ").slice(0, 100);
+
+        // Post-match: check for expiresIn or exp in the context of the match
+        if (rule.ruleId === "AUTHFAIL_JWT_NO_EXPIRATION") {
+          const context = file.content.slice(idx, idx + 200);
+          if (/(?:exp|expiresIn|expiresAt)\s*:|setExpiration/i.test(context)) continue;
+        }
 
         out.push({
           id: findingFingerprint([rule.ruleId, file.path, line, column, snippet]),

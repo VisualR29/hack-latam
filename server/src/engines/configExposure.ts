@@ -129,8 +129,9 @@ export function runConfigExposureEngine(files: FileSnapshot[]): Finding[] {
     if (/\.(ts|tsx|js|jsx|py)$/i.test(p)) {
       const xFrameRegex = /X-Frame-Options[\s]*[=:]\s*(?:SAMEORIGIN|DENY)?(?:;|,|$|\s)/gi;
       const missing = !/X-Frame-Options/i.test(file.content);
+      const usesHelmet = /helmet\s*\(\s*\)/i.test(file.content);
       
-      if (missing && /app\.|express\.|fastify\.|django\.|flask|http\.|Server|middleware/i.test(file.content)) {
+      if (missing && !usesHelmet && /app\.|express\.|fastify\.|django\.|flask|http\.|Server|middleware/i.test(file.content)) {
         const serverMatch = file.content.match(/(?:app\.|express\.|fastify\.|http\.server|Server|middleware)/);
         if (serverMatch) {
           const lc = lineAndColumn(file.content, serverMatch.index ?? 0);
@@ -185,7 +186,7 @@ export function runConfigExposureEngine(files: FileSnapshot[]): Finding[] {
         }
       }
       
-      if (!hasHsts && /app\.|express\.|fastify\.|django\.|flask|http\.|Server|middleware/i.test(file.content)) {
+      if (!hasHsts && !/helmet\s*\(\s*\)/i.test(file.content) && /app\.|express\.|fastify\.|django\.|flask|http\.|Server|middleware/i.test(file.content)) {
         const serverMatch = file.content.match(/(?:app\.|express\.|fastify\.|http\.server|Server|middleware)/);
         if (serverMatch && file.path.includes("src")) {
           const lc = lineAndColumn(file.content, serverMatch.index ?? 0);
