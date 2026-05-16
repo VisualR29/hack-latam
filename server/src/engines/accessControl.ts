@@ -22,7 +22,7 @@ const RULES: AccessControlRule[] = [
     severity: "high",
     owaspId: "A01",
     langs: /\.(ts|tsx|js)$/i,
-    regex: /(?:app\.|router\.)\s*(?:get|post|put|delete|patch)\s*\(\s*['"`]\/(?:api|admin|dashboard|user|account|profile)[^'"`]*['"`]\s*,\s*(?:(?!auth|middleware|verify|JWT|guard|require|check).){0,100}\s*\(.*\)\s*(?:=>|{)/gi,
+    regex: /(?:app\.|router\.)\s*(?:get|post|put|delete|patch)\s*\(\s*['"`]\/(?:api|admin|dashboard|user|account|profile)[^'"`]*['"`]\s*,\s*(?:(?!auth|middleware|verify|JWT|guard|require|check|limiter|protect|session|ensureAuth|isAuth|login|rateLimit|throttle).){0,100}\s*\(.*\)\s*(?:=>|{)/gi,
     description: () =>
       "Se detectó ruta que podría ser sensitiva (contiene /api, /admin, /user, etc) sin middleware de autenticación explícito.",
     fixRecommendation:
@@ -106,7 +106,7 @@ const RULES: AccessControlRule[] = [
     severity: "medium",
     owaspId: "A01",
     langs: /\.(ts|tsx|js)$/i,
-    regex: /User\.findByIdOrFail|getUser|user\s*=|userData\s*=|(?![\s\S]{0,100}(?:owner|userId|currentUser|auth))[\s\S]{0,80}req\.params\.userId/gi,
+    regex: /(?:User\.findByIdOrFail|getUser|findUser|getUserById)\s*\(\s*(?:req\.(?:params|query|body)\.(?:id|userId|user_id))(?![\s\S]{0,100}(?:owner|userId\s*===|currentUser|auth|session\.user|verify))/gi,
     description: () =>
       "Acceso a datos de usuario basado en parametro sin verificar que es el usuario actual.",
     fixRecommendation:

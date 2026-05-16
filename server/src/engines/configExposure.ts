@@ -32,7 +32,7 @@ export function runConfigExposureEngine(files: FileSnapshot[]): Finding[] {
     }
 
     if (/\.(js|cjs|mjs|ts|tsx|jsx)$/i.test(p)) {
-      const corsRegex = /cors\s*\(\s*\{[^}]{0,320}origin\s*:\s*(?:\*|['"`]\*['"`]|true)/i;
+      const corsRegex = /cors\s*\(\s*(?:\)\s*\(\s*)?\{[^}]{0,320}origin\s*:\s*(?:\*|['"`]\*['"`]|true)/i;
       let m: RegExpExecArray | null;
       const reC = new RegExp(corsRegex.source, corsRegex.flags.includes("g") ? corsRegex.flags : `${corsRegex.flags}g`);
 

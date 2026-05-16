@@ -221,8 +221,8 @@ const metadataUrl = "http://169.254.169.254/latest/meta-data/iam/security-creden
 const agent = new https.Agent({ rejectUnauthorized: false });
 axios.get(url, { httpsAgent: agent });
 
-// Localhost hardcoded reference
-const internalApi = "http://localhost:3000/internal/admin";
+// Private IP hardcoded reference
+const internalApi = "http://192.168.1.100/internal/admin";
 
 app.listen(3000, () => {
   console.log("Vulnerable app running on port 3000");

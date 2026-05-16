@@ -120,7 +120,7 @@ const RULES: InjectionRule[] = [
     severity: "high",
     owaspId: "A03",
     langs: /\.(js|ts|py|php|java)$/i,
-    regex: /(?:SELECT|INSERT|UPDATE|DELETE|WHERE|FROM)\s+[\s\S]{0,80}(?:\$\{|\+|template|f"|format|%s|\.replace|concat)\s*(?:\$\{|\+)/gi,
+    regex: /(?:SELECT|INSERT|UPDATE|DELETE|WHERE|FROM)\s+[\s\S]{0,80}(?:\$\{(?:req|request|params|body|query|event|props|user|input|data|args)[\w.]*\}|(?:\+|concat)\s*(?:req|request|params|body|query|event|props|user|input|data)|(?:f"|%s|\.format))/gi,
     description: () =>
       "Construcción de SQL que combina texto con variables. Un apóstrofe permite escapar y ejecutar SQL adicional.",
     fixRecommendation:

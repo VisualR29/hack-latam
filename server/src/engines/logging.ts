@@ -78,7 +78,7 @@ const RULES: LoggingRule[] = [
     severity: "high",
     owaspId: "A09",
     langs: /\.(ts|tsx|js|py)$/i,
-    regex: /(?:logger|log|console|print|print_r|var_dump|dump|audit)\.(?:info|error|warn|debug)?\s*\(\s*[\s\S]{0,100}(?:password|passwd|pwd|secret|token|apikey|key|auth|credential|oauth|jwt|bearer)/gi,
+    regex: /(?:logger|log|console|print|print_r|var_dump|dump|audit)\.(?:info|error|warn|debug)?\s*\(\s*[\s\S]{0,100}(?:password|passwd|pwd|secret|token|apikey|api_key|credential|oauth|jwt|bearer|private.?key)(?![\s\S]{0,30}(?:\.length|\.hash|redact|mask|\*\*\*|sanitize))/gi,
     description: () =>
       "Contraseña, token o apikey loguada. Expondrá credenciales en logs persistentes.",
     fixRecommendation:

@@ -92,7 +92,7 @@ const RULES: AuthFailureRule[] = [
     severity: "high",
     owaspId: "A07",
     langs: /\.(ts|tsx|js)$/i,
-    regex: /(?:sign|JWT\.sign|jsonwebtoken\.sign)\s*\(\s*[\s\S]{0,150}(?![\w\s]*exp|[\w\s]*expiresIn|[\w\s]*expiresAt)/gi,
+    regex: /(?:sign|JWT\.sign|jsonwebtoken\.sign)\s*\(\s*[\s\S]{0,350}(?![\w\s]*exp|[\w\s]*expiresIn|[\w\s]*expiresAt)/gi,
     description: () =>
       "JWT emitido sin campo 'exp' (expiration). Token válido indefinidamente.",
     fixRecommendation:

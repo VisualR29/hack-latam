@@ -50,7 +50,7 @@ const RULES: SSRFRule[] = [
     severity: "high",
     owaspId: "A10",
     langs: /\.(ts|tsx|js|py)$/i,
-    regex: /(?:http|localhost|127\.0\.0\.1|0\.0\.0\.0|192\.168\.|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(?:1[6-9]|2[0-9]|3[0-1]))/gi,
+    regex: /http:\/\/(?:localhost|127\.0\.0\.1|0\.0\.0\.0|192\.168\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(?:1[6-9]|2[0-9]|3[0-1])\.\d{1,3}\.\d{1,3})/gi,
     description: () =>
       "URL hardcodeada referenciando localhost o rango privado. Posible SSRF interno.",
     fixRecommendation:
@@ -185,10 +185,9 @@ export function runSSRFEngine(files: FileSnapshot[]): Finding[] {
         const { line, column } = lineAndColumn(file.content, idx);
         const snippet = file.content.slice(idx, idx + 100).replace(/\s+/g, " ").slice(0, 100);
 
-        // Skip potential false positives
-        if (rule.ruleId === "SSRF_LOCALHOST_ACCESS" && /localhost|127\.0\.0\.1|0\.0\.0\.0/.test(snippet)) {
-          // Only flag if looks like dynamic request, not hardcoded test
-          if (!/test|mock|stub|example|localhost:3000|localhost:5000/.test(snippet.toLowerCase())) {
+        // Skip common dev/test patterns
+        if (rule.ruleId === "SSRF_LOCALHOST_ACCESS") {
+          if (/test|mock|stub|example|\.test\.|\.spec\.|localhost:\d{4}/.test(snippet.toLowerCase())) {
             continue;
           }
         }
