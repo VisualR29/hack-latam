@@ -36,32 +36,47 @@ export async function runPipeline(
   });
 
   const enginesMs = startTimer();
+
   const secrets = runSecretsEngine(files);
+  const secretsAdvanced = runSecretsAdvancedEngine(files);
   const deps = runDepsEngine(files);
   const patterns = runPatternsEngine(files);
   const configExposure = runConfigExposureEngine(files);
+  const injection = runInjectionEngine(files);
+  const integrity = runIntegrityEngine(files);
+  const accessControl = runAccessControlEngine(files);
+  const authFailures = runAuthFailuresEngine(files);
+  const loggingFindings = runLoggingEngine(files);
+  const ssrf = runSSRFEngine(files);
 
   log.debug("pipeline.engines", "Motores heurísticos ejecutados", {
     reqId,
     ms: enginesMs(),
     secrets: secrets.length,
+    secretsAdvanced: secretsAdvanced.length,
     deps: deps.length,
     patterns: patterns.length,
     configExposure: configExposure.length,
+    injection: injection.length,
+    integrity: integrity.length,
+    accessControl: accessControl.length,
+    authFailures: authFailures.length,
+    logging: loggingFindings.length,
+    ssrf: ssrf.length,
   });
 
   const mergedFindingsRaw = [
-    ...runSecretsEngine(files),
-    ...runSecretsAdvancedEngine(files),
-    ...runDepsEngine(files),
-    ...runPatternsEngine(files),
-    ...runConfigExposureEngine(files),
-    ...runInjectionEngine(files),
-    ...runIntegrityEngine(files),
-    ...runAccessControlEngine(files),
-    ...runAuthFailuresEngine(files),
-    ...runLoggingEngine(files),
-    ...runSSRFEngine(files),
+    ...secrets,
+    ...secretsAdvanced,
+    ...deps,
+    ...patterns,
+    ...configExposure,
+    ...injection,
+    ...integrity,
+    ...accessControl,
+    ...authFailures,
+    ...loggingFindings,
+    ...ssrf,
   ];
 
   const { findings: deduped, riskScore, trafficLight } =
