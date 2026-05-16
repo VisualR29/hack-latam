@@ -3,6 +3,7 @@ import {
   MAX_TOTAL_CONTENT_BYTES,
 } from "../constants.js";
 import { shouldIncludePath, applyGlobalLimits } from "./filters.js";
+import { log } from "../util/logger.js";
 import type { FileSnapshot, IngestOutcome } from "./types.js";
 
 const GITHUB_HOST = "github.com";
@@ -43,9 +44,17 @@ async function ghFetch(
 export async function ingestGithubRepo(
   repoUrl: string,
   token?: string,
+  reqId?: string,
 ): Promise<IngestOutcome> {
+  log.info("ingest.github.start", "Ingesta desde GitHub", {
+    reqId,
+    repoUrl,
+    hasToken: Boolean(token),
+  });
+
   const parsed = parseGithubRepoUrl(repoUrl);
   if (!parsed) {
+    log.warn("ingest.github.invalid_url", "URL de GitHub inválida", { reqId, repoUrl });
     return {
       files: [],
       warnings: [
@@ -62,6 +71,12 @@ export async function ingestGithubRepo(
       repoRes.status === 404
         ? "Repositorio no encontrado o privado (el MVP solo soporta repos públicos sin token adicional)."
         : `GitHub respondió ${repoRes.status} al leer el repositorio.`;
+    log.warn("ingest.github.repo_failed", msg, {
+      reqId,
+      owner,
+      repo,
+      status: repoRes.status,
+    });
     return { files: [], warnings: [msg], truncated: false };
   }
   const repoJson = (await repoRes.json()) as { default_branch?: string };
@@ -72,6 +87,13 @@ export async function ingestGithubRepo(
     token,
   );
   if (!treeRes.ok) {
+    log.warn("ingest.github.tree_failed", "No se pudo listar el árbol del repo", {
+      reqId,
+      owner,
+      repo,
+      branch,
+      status: treeRes.status,
+    });
     return {
       files: [],
       warnings: [`No se pudo listar archivos (${treeRes.status}).`],
@@ -157,6 +179,18 @@ export async function ingestGithubRepo(
   }
 
   const limited = applyGlobalLimits(collected, warnings);
+
+  log.info("ingest.github.done", "Ingesta GitHub finalizada", {
+    reqId,
+    owner,
+    repo,
+    branch,
+    blobsConsidered: blobs.length,
+    filesKept: limited.files.length,
+    truncated: limited.truncated || treeTruncatedRemote,
+    warnings: limited.warnings.length,
+  });
+
   return {
     files: limited.files,
     warnings: limited.warnings,

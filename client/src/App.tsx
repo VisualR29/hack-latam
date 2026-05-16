@@ -1,5 +1,8 @@
 import { FormEvent, useMemo, useState } from "react";
 
+import { ANALYZE_URL } from "./config";
+import { clientLog, clientTimer } from "./util/logger";
+
 type Severity = "low" | "medium" | "high";
 
 type OwaspId =
@@ -130,6 +133,9 @@ export default function App() {
     event.preventDefault();
     setError(null);
 
+    const elapsed = clientTimer();
+    clientLog.info("analyze.submit", "Usuario lanzó análisis", { tab });
+
     try {
       setLoading(true);
 
@@ -142,7 +148,13 @@ export default function App() {
         const form = new FormData();
         form.append("file", zipFile);
 
-        response = await fetch("/api/analyze", {
+        clientLog.debug("analyze.request", "POST ZIP", {
+          url: ANALYZE_URL,
+          zipName: zipFile.name,
+          zipBytes: zipFile.size,
+        });
+
+        response = await fetch(ANALYZE_URL, {
           method: "POST",
           body: form,
         });
@@ -151,7 +163,13 @@ export default function App() {
           throw new Error("Escribe algo de código antes de lanzar el análisis.");
         }
 
-        response = await fetch("/api/analyze", {
+        clientLog.debug("analyze.request", "POST raw", {
+          url: ANALYZE_URL,
+          codeBytes: code.length,
+          filename: filename.trim() || "pasted-code.txt",
+        });
+
+        response = await fetch(ANALYZE_URL, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -163,7 +181,12 @@ export default function App() {
       } else {
         if (!repoUrl.trim()) throw new Error("Pega primero una URL válida.");
 
-        response = await fetch("/api/analyze", {
+        clientLog.debug("analyze.request", "POST github", {
+          url: ANALYZE_URL,
+          repoUrl: repoUrl.trim(),
+        });
+
+        response = await fetch(ANALYZE_URL, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -178,6 +201,11 @@ export default function App() {
           message?: string;
           error?: string;
         } | null;
+        clientLog.warn("analyze.http_error", "Respuesta no OK del servidor", {
+          status: response.status,
+          error: maybeJson?.error,
+          ms: elapsed(),
+        });
         throw new Error(
           maybeJson?.message ||
             `El servidor respondió ${response.status} (${maybeJson?.error ?? "UNKNOWN_ERROR"}).`,
@@ -198,10 +226,29 @@ export default function App() {
         );
       });
 
+      clientLog.info("analyze.success", "Análisis recibido", {
+        ms: elapsed(),
+        findings: payload.findings.length,
+        riskScore: payload.riskScore,
+        trafficLight: payload.trafficLight,
+        usedAiExplanation: payload.usedAiExplanation,
+      });
+
       setResult(payload);
     } catch (err) {
       setResult(null);
-      setError(err instanceof Error ? err.message : "Error inesperado.");
+      const message =
+        err instanceof TypeError && /fetch|network|failed|disconnected/i.test(String(err))
+          ? "No se pudo contactar al servidor. Abrí la app en http://127.0.0.1:5173 (no localhost), confirmá que `npm run dev` esté activo y que DevTools → Network no tenga «Offline» marcado."
+          : err instanceof Error
+            ? err.message
+            : "Error inesperado.";
+      clientLog.error("analyze.failed", message, {
+        tab,
+        ms: elapsed(),
+        err: err instanceof Error ? err.message : String(err),
+      });
+      setError(message);
     } finally {
       setLoading(false);
     }

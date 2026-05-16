@@ -1,29 +1,76 @@
 import type { FileSnapshot } from "../ingest/types.js";
 import type { AnalysisLimits, AnalysisResult } from "../schemas/findings.js";
 import { enrichFindingsEducation } from "../explain/explanationEngine.js";
+import { log, startTimer } from "../util/logger.js";
 import { runSecretsEngine } from "./secrets.js";
 import { runDepsEngine } from "./deps.js";
 import { runPatternsEngine } from "./patterns.js";
 import { runConfigExposureEngine } from "./configExposure.js";
 import { aggregateRisk } from "./riskAggregator.js";
 
+type PipelineMeta = Pick<AnalysisLimits, "warnings" | "truncated"> & {
+  reqId?: string;
+};
+
 export async function runPipeline(
   files: FileSnapshot[],
-  limitsMeta: Pick<AnalysisLimits, "warnings" | "truncated">,
+  limitsMeta: PipelineMeta,
 ): Promise<AnalysisResult> {
+  const { reqId } = limitsMeta;
+  const pipelineMs = startTimer();
   const aggregatedBytes = files.reduce((sum, f) => sum + f.content.length, 0);
 
+  log.info("pipeline.start", "Inicio del pipeline de análisis", {
+    reqId,
+    files: files.length,
+    totalBytesApprox: aggregatedBytes,
+    truncated: limitsMeta.truncated,
+    ingestWarnings: limitsMeta.warnings.length,
+  });
+
+  const enginesMs = startTimer();
+  const secrets = runSecretsEngine(files);
+  const deps = runDepsEngine(files);
+  const patterns = runPatternsEngine(files);
+  const configExposure = runConfigExposureEngine(files);
+
+  log.debug("pipeline.engines", "Motores heurísticos ejecutados", {
+    reqId,
+    ms: enginesMs(),
+    secrets: secrets.length,
+    deps: deps.length,
+    patterns: patterns.length,
+    configExposure: configExposure.length,
+  });
+
   const mergedFindingsRaw = [
-    ...runSecretsEngine(files),
-    ...runDepsEngine(files),
-    ...runPatternsEngine(files),
-    ...runConfigExposureEngine(files),
+    ...secrets,
+    ...deps,
+    ...patterns,
+    ...configExposure,
   ];
 
   const { findings: deduped, riskScore, trafficLight } =
     aggregateRisk(mergedFindingsRaw);
 
-  const enriched = await enrichFindingsEducation(deduped);
+  log.info("pipeline.aggregate", "Hallazgos agregados", {
+    reqId,
+    rawCount: mergedFindingsRaw.length,
+    dedupedCount: deduped.length,
+    riskScore,
+    trafficLight,
+  });
+
+  const enrichMs = startTimer();
+  const enriched = await enrichFindingsEducation(deduped, reqId);
+
+  log.info("pipeline.done", "Pipeline finalizado", {
+    reqId,
+    ms: pipelineMs(),
+    enrichMs: enrichMs(),
+    findings: enriched.findings.length,
+    usedAiExplanation: enriched.usedAiExplanation,
+  });
 
   const limits: AnalysisLimits = {
     filesProcessed: files.length,

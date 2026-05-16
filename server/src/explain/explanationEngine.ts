@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import type { Educational, Finding } from "../schemas/findings.js";
+import { log, startTimer } from "../util/logger.js";
 import { educationFor } from "./templates.js";
 
 const EducationalBlockSchema = z.object({
@@ -35,6 +36,7 @@ function readAiConfig(): {
 
 async function refineWithOpenAi(
   findings: Finding[],
+  reqId?: string,
 ): Promise<Map<string, Educational> | null> {
   const { apiKey, baseUrl, model } = readAiConfig();
   if (!apiKey) return null;
@@ -50,6 +52,13 @@ async function refineWithOpenAi(
     summaryBody: f.description,
     baseline: educationFor(f.ruleId),
   }));
+
+  const aiMs = startTimer();
+  log.info("explain.ai.start", "Llamada a OpenAI para explicaciones", {
+    reqId,
+    model,
+    findings: findings.length,
+  });
 
   try {
     const controller = new AbortController();
@@ -82,7 +91,14 @@ async function refineWithOpenAi(
 
     clearTimeout(timer);
 
-    if (!res.ok) return null;
+    if (!res.ok) {
+      log.warn("explain.ai.http_error", "OpenAI respondió con error", {
+        reqId,
+        status: res.status,
+        ms: aiMs(),
+      });
+      return null;
+    }
 
     const payload = (await res.json()) as {
       choices?: Array<{ message?: { content?: string } }>;
@@ -99,29 +115,57 @@ async function refineWithOpenAi(
       ? "items" in flexible.data
         ? flexible.data.items
         : flexible.data.findings
-      : null;    if (!items) return null;
+      : null;    if (!items) {
+      log.warn("explain.ai.parse_error", "Respuesta de OpenAI sin formato esperado", {
+        reqId,
+        ms: aiMs(),
+      });
+      return null;
+    }
 
     const map = new Map<string, Educational>();
     for (const item of items) {
       map.set(item.id, item.educational);
     }
 
+    log.info("explain.ai.done", "Explicaciones IA aplicadas", {
+      reqId,
+      ms: aiMs(),
+      items: map.size,
+    });
+
     return map.size ? map : null;
-  } catch {
+  } catch (err) {
+    log.warn(
+      "explain.ai.failed",
+      "Fallo al enriquecer con IA; se usan plantillas",
+      { reqId, ms: aiMs() },
+      err,
+    );
     return null;
   }
 }
 
 export async function enrichFindingsEducation(
   findings: Finding[],
+  reqId?: string,
 ): Promise<{ findings: Finding[]; usedAiExplanation: boolean }> {
   const hadAiKey = Boolean(process.env.OPENAI_API_KEY?.trim());
 
-  if (findings.length === 0)
+  if (findings.length === 0) {
+    log.debug("explain.skip", "Sin hallazgos; no se enriquece", { reqId });
     return { findings, usedAiExplanation: false };
+  }
+
+  if (!hadAiKey) {
+    log.debug("explain.templates", "Sin OPENAI_API_KEY; plantillas locales", {
+      reqId,
+      findings: findings.length,
+    });
+  }
 
   const capped = findings.slice(0, 80);
-  const aiMap = await refineWithOpenAi(capped);
+  const aiMap = await refineWithOpenAi(capped, reqId);
 
   const enriched = findings.map((f) => {
     const tpl = educationFor(f.ruleId);
