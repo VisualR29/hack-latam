@@ -129,6 +129,143 @@ const RULES: PatternRule[] = [
       "Activa httpOnly cuando la cookie lleve información de sesión/identidad sensible y revisa modelo de cookies mismo-site.",
     safeExample: "httpOnly: true",
   },
+  // A08: Java Deserialization
+  {
+    ruleId: "PATTERN_JAVA_OBJECT_INPUT_STREAM",
+    title: "Deserialización Java potencialmente insegura (ObjectInputStream)",
+    severity: "high",
+    owaspId: "A08",
+    langs: /\.(java|kt)$/i,
+    re: /new\s+ObjectInputStream|readObject\s*\(|ObjectInputStream[\s\S]{0,60}readObject/g,
+    describe: () =>
+      "ObjectInputStream puede ejecutar código arbitrario durante deserialización si el stream contiene datos maliciosos.",
+    fixRecommendation:
+      "Implementa ObjectInputFilter, valida tipos antes de deserializar o usa JSON/serialización segura alternativa.",
+    safeExample: "// Usar JSON en lugar de serialización Java nativa",
+  },
+  // A08: .NET Deserialization
+  {
+    ruleId: "PATTERN_DOTNET_BINARY_FORMATTER",
+    title: "BinaryFormatter o DataContractDeserializer (.NET)",
+    severity: "high",
+    owaspId: "A08",
+    langs: /\.(cs|csproj)$/i,
+    re: /BinaryFormatter|DataContractDeserializer|DeserializeObject|FromJson\(/gi,
+    describe: () =>
+      "BinaryFormatter fue deprecado por Microsoft debido a riesgos de RCE. DataContractDeserializer también es riesgoso.",
+    fixRecommendation:
+      "Cambia a JsonSerializerOptions (System.Text.Json) o validadores explícitos. Nunca deserialices datos no confiables.",
+  },
+  // A08: PHP Unserialize
+  {
+    ruleId: "PATTERN_PHP_UNSERIALIZE",
+    title: "PHP unserialize() con datos no confiables",
+    severity: "high",
+    owaspId: "A08",
+    langs: /\.(php)$/i,
+    re: /unserialize\s*\(\s*\$(?:_GET|_POST|_REQUEST|_COOKIE|data|payload|input)/gi,
+    describe: () =>
+      "unserialize() puede ejecutar código si datos provienen de usuario. Objeto PHP deserializado puede llamar __wakeup/destruct.",
+    fixRecommendation:
+      "Usa json_decode() en lugar de unserialize(). Si necesitas PHP objects, usa allowed_classes parameter con whitelist.",
+  },
+  // A08: Ruby Marshal
+  {
+    ruleId: "PATTERN_RUBY_MARSHAL_LOAD",
+    title: "Ruby Marshal.load con datos externo",
+    severity: "high",
+    owaspId: "A08",
+    langs: /\.(rb|rails)$/i,
+    re: /Marshal\.load|YAML\.load\s*\(\s*\$(?:params|request|data)/gi,
+    describe: () =>
+      "Marshal.load ejecuta código Ruby arbitrario durante deserialización. YAML.load es similar.",
+    fixRecommendation:
+      "Usa Marshal.safe_load o YAML.safe_load. Para untrusted data, usa JSON.",
+  },
+  // A03: LDAP Injection
+  {
+    ruleId: "PATTERN_LDAP_INJECTION",
+    title: "Posible LDAP Injection (construcción dinámica de filtro)",
+    severity: "medium",
+    owaspId: "A03",
+    langs: /\.(js|ts|py|php|java)$/i,
+    re: /ldap_search|ldapjs|python-ldap|ldapclient[\s\S]{0,80}(?:\$|template|f"|\.format|%s|\.replace|\+|\{)/gi,
+    describe: () =>
+      "Construcción de filtros LDAP combinando texto del usuario permite inyección y bypass de autenticación.",
+    fixRecommendation:
+      "Usa librerías que parametricen filtros LDAP. Escapa caracteres especiales: *, (, ), \\, NUL según RFC 4515.",
+    safeExample: "// Use ldapjs.escapeFilterString(input) o similar según librería",
+  },
+  // A03: XPath Injection
+  {
+    ruleId: "PATTERN_XPATH_INJECTION",
+    title: "Posible XPath Injection",
+    severity: "medium",
+    owaspId: "A03",
+    langs: /\.(js|ts|py|java|php)$/i,
+    re: /xpath\s*\(|selectNodes|selectSingleNode|compile\s*\(\s*['""`][\s\S]{0,50}(?:\$|\{|\+|template|format)/gi,
+    describe: () =>
+      "Construcción de expresiones XPath con datos del usuario permite navegar árbol XML arbitrariamente.",
+    fixRecommendation:
+      "Usa métodos que parametricen XPath (variables de contexto). Valida entrada estrictamente.",
+    safeExample: "// Usar XPath variables: //user[username=$username and password=$password]",
+  },
+  // A03: Command Injection (extended)
+  {
+    ruleId: "PATTERN_COMMAND_INJECTION_SHELL",
+    title: "Posible command injection via shell (backticks, shell_exec)",
+    severity: "high",
+    owaspId: "A03",
+    langs: /\.(php|py|sh|bash)$/i,
+    re: /`[\s\S]{0,60}\$\{|shell_exec\s*\(|system\s*\(|passthru\s*\(|exec\s*\([\s\S]{0,60}(?:\$_|input|user|request)/gi,
+    describe: () =>
+      "Ejecución de comandos shell con interpolación directa de datos del usuario.",
+    fixRecommendation:
+      "Usa array de argumentos (spawn) sin shell. Si necesitas shell, escapa muy estrictamente.",
+    safeExample: "// spawn('ls', ['-la', userDir]) NO: shell=true",
+  },
+  // A03: Template Injection
+  {
+    ruleId: "PATTERN_TEMPLATE_INJECTION",
+    title: "Posible Server-Side Template Injection (SSTI)",
+    severity: "medium",
+    owaspId: "A03",
+    langs: /\.(js|ts|py)$/i,
+    re: /render\s*\(\s*['""`][\s\S]{0,50}\$\{|\beval\s*\(|template\s*\(\s*req\.|\.compile\s*\(\s*userInput/gi,
+    describe: () =>
+      "Renderizar templates con código del usuario sin sanear permite ejecución de servidor.",
+    fixRecommendation:
+      "Usa template sandboxes o engines que desactiven funciones peligrosas. Valida/escapa entrada.",
+    safeExample: "// handlebars con context claro, no input directo en template string",
+  },
+  // A03: XML External Entity (XXE)
+  {
+    ruleId: "PATTERN_XXE_INJECTION",
+    title: "XML Parsing potencialmente vulnerable a XXE",
+    severity: "medium",
+    owaspId: "A03",
+    langs: /\.(java|py|php|csharp|js)$/i,
+    re: /parseXml|XMLParser|xml\.loads|XmlDocument|XPathDocument|DOMDocument\(\)|parse\s*\(\s*xml[\s\S]{0,50}(?:!DOCTYPE|ENTITY|SYSTEM)/gi,
+    describe: () =>
+      "Parsear XML sin desactivar DTDs/ENTITY permite acceso a archivos internos y SSRF.",
+    fixRecommendation:
+      "Desactiva DOCTYPE/ENTITY/External DTDs en parser XML. Usa librerías seguras con defenseXXE=true.",
+    safeExample: "// Python: defusedxml.parse() en lugar de xml.etree",
+  },
+  // A03: NoSQL Injection
+  {
+    ruleId: "PATTERN_NOSQL_INJECTION",
+    title: "Posible NoSQL Injection (MongoDB $where o similar)",
+    severity: "high",
+    owaspId: "A03",
+    langs: /\.(js|ts)$/i,
+    re: /\$where\s*:|db\.[\w]+\s*\(\s*\{[\s\S]{0,100}\$where|\{\s*\$function\s*:/gi,
+    describe: () =>
+      "$where en MongoDB ejecuta código JavaScript arbitrario. Equivalente a SQL injection.",
+    fixRecommendation:
+      "Evita $where. Usa operadores de query estándar. Filtra/valida entrada antes de construir queries.",
+    safeExample: "// db.collection.find({ username: username }) en lugar de $where",
+  },
 ];
 
 export function runPatternsEngine(files: FileSnapshot[]): Finding[] {
