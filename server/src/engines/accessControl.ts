@@ -36,7 +36,7 @@ const RULES: AccessControlRule[] = [
     severity: "high",
     owaspId: "A01",
     langs: /\.(ts|tsx|js)$/i,
-    regex: /(?:findById|getById|get\s+.*ById|id\s*=|\.id\s*==|\.id\s*===)\s*\(\s*(?:req\.(?:params|query|body)\.id|id)\s*\)(?![\s\S]{0,100}(?:userId|ownerId|currentUser|session\.user|auth|owner\s*===|verify))/gi,
+    regex: /(?:findById|getById|get\s+.*ById|id\s*=|\.id\s*==|\.id\s*===)\s*\(\s*(?:req\.(?:params|query|body)\.id|id)\s*\)(?![\s\S]{0,100}(?:userId|ownerId|currentUser|req\.user|session\.user|auth|owner\s*===|verify))/gi,
     description: () =>
       "Se accede recurso por ID desde parametro de usuario sin verificar que pertenece al usuario actual.",
     fixRecommendation:

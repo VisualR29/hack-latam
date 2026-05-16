@@ -302,6 +302,13 @@ export function runSecretsAdvancedEngine(files: FileSnapshot[]): Finding[] {
       while ((m = re.exec(file.content))) {
         const idx = m.index;
         const { line, column } = lineAndColumn(file.content, idx);
+
+        // Skip matches on lines that reference process.env
+        const lineStart = file.content.lastIndexOf("\n", idx) + 1;
+        const lineEnd = file.content.indexOf("\n", idx);
+        const lineContent = file.content.slice(lineStart, lineEnd === -1 ? undefined : lineEnd);
+        if (/process\.env/i.test(lineContent)) continue;
+
         const fp = findingFingerprint([
           rule.ruleId,
           file.path,

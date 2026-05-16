@@ -176,7 +176,7 @@ export function runAuthFailuresEngine(files: FileSnapshot[]): Finding[] {
   for (const file of files) {
     // Si el archivo usa Bearer token auth, CSRF no aplica
     // (CSRF solo es relevante con cookies de sesión automáticas)
-    const usesBearerAuth = /Bearer\s|authorization.*header|req\.headers\.authorization/i.test(file.content);
+    const usesBearerAuth = /Bearer\s|authorization.*header|req\.headers\.authorization|jwt\.sign|jwt\.verify/i.test(file.content);
 
     for (const rule of RULES) {
       if (rule.langs && !rule.langs.test(file.path.replace(/\\/g, "/"))) continue;
@@ -191,6 +191,12 @@ export function runAuthFailuresEngine(files: FileSnapshot[]): Finding[] {
         const idx = m.index;
         const { line, column } = lineAndColumn(file.content, idx);
         const snippet = file.content.slice(idx, idx + 100).replace(/\s+/g, " ").slice(0, 100);
+
+        // Post-match: check for expiresIn or exp in the context of the match
+        if (rule.ruleId === "AUTHFAIL_JWT_NO_EXPIRATION") {
+          const context = file.content.slice(idx, idx + 200);
+          if (/(?:exp|expiresIn|expiresAt)\s*:|setExpiration/i.test(context)) continue;
+        }
 
         out.push({
           id: findingFingerprint([rule.ruleId, file.path, line, column, snippet]),

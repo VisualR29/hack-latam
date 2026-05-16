@@ -78,7 +78,7 @@ const RULES: LoggingRule[] = [
     severity: "high",
     owaspId: "A09",
     langs: /\.(ts|tsx|js|py)$/i,
-    regex: /(?:logger|log|console|print|print_r|var_dump|dump|audit)\.(?:info|error|warn|debug)?\s*\(\s*[\s\S]{0,100}(?:password|passwd|pwd|secret|token|apikey|api_key|credential|oauth|jwt|bearer|private.?key)(?![\s\S]{0,30}(?:\.length|\.hash|redact|mask|\*\*\*|sanitize))/gi,
+    regex: /(?:logger|log|console|print|print_r|var_dump|dump|audit)\.(?:info|error|warn|debug)?\s*\(\s*[^);]{0,100}(?:password|passwd|pwd|secret|token|apikey|api_key|credential|oauth|jwt|bearer|private.?key)(?![\s\S]{0,30}(?:\.length|\.hash|redact|mask|\*\*\*|sanitize))/gi,
     description: () =>
       "Contraseña, token o apikey loguada. Expondrá credenciales en logs persistentes.",
     fixRecommendation:
@@ -148,7 +148,7 @@ const RULES: LoggingRule[] = [
     severity: "low",
     owaspId: "A09",
     langs: /\.(ts|tsx|js|py)$/i,
-    regex: /(?:logger|log|audit)\.(?:info|error|warn|debug)\s*\(\s*[\s\S]{0,100}(?:req\.|userInput|message|data|body|params)[\s\S]{0,100}(?![\s\S]{0,100}(?:sanitize|escape|replace|newline|clean|strip))/gi,
+    regex: /(?:logger|log|audit)\.(?:info|error|warn|debug)\s*\(\s*[^);]{0,100}(?:req\.|userInput|message|data|body|params)[^);]{0,100}(?![\s\S]{0,100}(?:sanitize|escape|replace|newline|clean|strip))/gi,
     description: () =>
       "Entrada del usuario loguada sin sanitizar newlines. Permite inyectar entries falsas.",
     fixRecommendation:
@@ -159,9 +159,16 @@ const RULES: LoggingRule[] = [
 export function runLoggingEngine(files: FileSnapshot[]): Finding[] {
   const out: Finding[] = [];
 
-  for (const file of files) {
+    for (const file of files) {
+    const isStructured = /winston|pino|bunyan|morgan/i.test(file.content);
+
     for (const rule of RULES) {
       if (rule.langs && !rule.langs.test(file.path.replace(/\\/g, "/"))) continue;
+
+      // Skip structural rules if structured logging framework is used
+      if (isStructured && ["LOGGING_NO_TIMESTAMP", "LOGGING_NO_CORRELATION_ID", "LOGGING_MISSING_CRITICAL_EVENTS", "LOGGING_LOG_INJECTION"].includes(rule.ruleId)) {
+        continue;
+      }
 
       const re = new RegExp(rule.regex.source, rule.regex.flags.includes("g") ? rule.regex.flags : `${rule.regex.flags}g`);
 
