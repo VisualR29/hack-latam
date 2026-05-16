@@ -63,3 +63,91 @@
 .sev-high { color: #ffb4ab; font-weight: 700; }
 .sev-med { color: #facc15; font-weight: 700; }
 .sev-low { color: #a8ffee; font-weight: 700; }
+
+/* Theme overrides for key design tokens so the theme toggle has visible effect */
+html.dark .bg-background { background-color: #0c141a !important; }
+html.light .bg-background { background-color: #ffffff !important; }
+
+html.dark .text-on-background { color: #dbe3ec !important; }
+html.light .text-on-background { color: #0c141a !important; }
+
+html.dark .bg-surface-container { background-color: #192127 !important; }
+html.light .bg-surface-container { background-color: #f6f7f8 !important; }
+
+html.dark .bg-surface-container-low { background-color: #151c22 !important; }
+html.light .bg-surface-container-low { background-color: #ffffff !important; }
+
+html.dark .bg-surface-container-high { background-color: #232b31 !important; }
+html.light .bg-surface-container-high { background-color: #ffffff !important; }
+
+html.dark .bg-surface-container-highest { background-color: #2e363c !important; }
+html.light .bg-surface-container-highest { background-color: #ffffff !important; }
+
+html.dark .text-on-surface { color: #dbe3ec !important; }
+html.light .text-on-surface { color: #111827 !important; }
+
+html.dark .text-on-surface-variant { color: #bacac5 !important; }
+html.light .text-on-surface-variant { color: #4b5563 !important; }
+
+html.dark .border-outline-variant { border-color: #3b4a46 !important; }
+html.light .border-outline-variant { border-color: #e5e7eb !important; }
+
+html.dark .bg-primary { background-color: #a8ffee !important; }
+html.light .bg-primary { background-color: #00665a !important; }
+
+html.dark .text-primary { color: #a8ffee !important; }
+html.light .text-primary { color: #00665a !important; }
+
+/* Inputs and code blocks */
+html.dark .code-textarea { background-color: #0b1216 !important; color: #dbe3ec !important; }
+html.light .code-textarea { background-color: #f8fafc !important; color: #0c141a !important; }
+
+/* Scrollbar tweaks for light mode */
+html.light .custom-scrollbar::-webkit-scrollbar-track { background: #f0f0f0; }
+html.light .custom-scrollbar::-webkit-scrollbar-thumb { background: #c7c7c7; }
+
+/* Additional light-mode overrides to cover more UI tokens and components */
+html.light body {
+  background-color: #f8fafc !important;
+  color: #0c141a !important;
+}
+
+html.light .bg-surface { background-color: #ffffff !important; }
+html.light .surface, html.light .surface-dim { background-color: #ffffff !important; }
+
+html.light .bg-surface-container-low, html.light .bg-surface-container-high, html.light .bg-surface-container-highest, html.light .bg-surface-container { background-color: #ffffff !important; }
+
+html.light .bg-surface-container-lowest { background-color: #f8fafc !important; }
+
+html.light .bg-background { background-color: #ffffff !important; }
+
+html.light .text-on-surface, html.light .text-on-background, html.light .text-on-surface-variant { color: #0f1724 !important; }
+
+html.light .border, html.light .border-outline-variant { border-color: #e6e9ee !important; }
+
+html.light .bg-primary-container, html.light .bg-primary { background-color: #00665a !important; }
+html.light .text-primary, html.light .font-headline-md { color: #00665a !important; }
+
+html.light .material-symbols-outlined { color: #0c141a !important; }
+
+html.light input, html.light textarea, html.light .code-textarea {
+  background-color: #ffffff !important;
+  color: #0c141a !important;
+  border-color: #e6e9ee !important;
+}
+
+html.light .inner-glow { box-shadow: inset 0 0 0 0 rgba(0,0,0,0.03) !important; }
+
+/* Cards and panels */
+html.light .bg-surface-container-low, html.light .bg-surface-container-high, html.light .bg-surface-container-highest {
+  box-shadow: 0 1px 2px rgba(16,24,40,0.03);
+}
+
+/* Ensure SVG strokes/icons adapt */
+html.light svg { color: inherit; }
+
+/* Notifications and small panels */
+html.light .shadow-lg { box-shadow: 0 6px 18px rgba(20,24,28,0.08) !important; }
+
+/* Ensure modal backgrounds are readable */
+html.light .rounded { background-clip: padding-box; }

@@ -4,6 +4,7 @@ import { FindingSchema } from "../schemas/findings.js";
 export function aggregateRisk(findingsInput: Finding[]): {
   findings: Finding[];
   riskScore: number;
+  secureScore: number;
   trafficLight: TrafficLight;
 } {
   const dedupKeys = new Set<string>();
@@ -35,14 +36,19 @@ export function aggregateRisk(findingsInput: Finding[]): {
     Math.round(high * 22 + medium * 11 + low * 4),
   );
 
+  const riskScore = findings.length === 0 ? 0 : rawScore;
+  const secureScore = 100 - riskScore;
+
+  // Semáforo basado en secureScore: alto = verde (seguro), bajo = rojo (peligroso)
   let trafficLight: TrafficLight = "green";
-  if (rawScore <= 28) trafficLight = "green";
-  else if (rawScore <= 62) trafficLight = "yellow";
+  if (secureScore >= 72) trafficLight = "green";
+  else if (secureScore >= 38) trafficLight = "yellow";
   else trafficLight = "red";
 
   return {
     findings,
-    riskScore: findings.length === 0 ? 0 : rawScore,
+    riskScore,
+    secureScore,
     trafficLight,
   };
 }
