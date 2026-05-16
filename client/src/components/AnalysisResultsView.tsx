@@ -1,28 +1,45 @@
 import { useMemo } from "react";
 
 import { CategoryAccordion } from "./CategoryAccordion";
+import { LearningJourney } from "./LearningJourney";
+import { MissionSummary } from "./MissionSummary";
 import { SecurityScoreHero } from "./SecurityScoreHero";
 import type { AnalysisResult } from "../types/analysis";
 import type { Finding, OwaspId, Severity } from "./FindingCard";
 
 export type { AnalysisResult, OwaspCategory, TrafficLight } from "../types/analysis";
 
-function countUrgent(result: AnalysisResult) {
-  return result.categories.reduce((sum, c) => sum + c.severitySummary.high, 0);
+function countBySeverity(result: AnalysisResult) {
+  let urgent = 0;
+  let important = 0;
+  let minor = 0;
+  for (const c of result.categories) {
+    urgent += c.severitySummary.high;
+    important += c.severitySummary.medium;
+    minor += c.severitySummary.low;
+  }
+  if (result.categories.length === 0) {
+    for (const f of result.findings) {
+      if (f.severity === "high") urgent++;
+      else if (f.severity === "medium") important++;
+      else minor++;
+    }
+  }
+  return { urgent, important, minor };
 }
 
 function summaryCopy(result: AnalysisResult, totalFindings: number, urgent: number) {
   if (result.limits.filesProcessed === 0) {
     return {
       headline: "No pudimos revisar tu código",
-      body: "Revisá las advertencias de abajo. Puede ser un problema de conexión con GitHub o que el archivo esté vacío.",
+      body: "Revisá los avisos de abajo. Puede ser un problema de conexión o un archivo vacío.",
     };
   }
 
   if (totalFindings === 0) {
     return {
-      headline: "Buenas noticias: no vimos riesgos evidentes",
-      body: "Tu puntaje de seguridad es alto. Igual conviene revisar el código cuando hagas cambios importantes.",
+      headline: "¡Felicitaciones! Tu escudo está fuerte",
+      body: "No encontramos misiones pendientes. Cuando cambies algo importante, volvé a escanear.",
     };
   }
 
@@ -30,22 +47,22 @@ function summaryCopy(result: AnalysisResult, totalFindings: number, urgent: numb
     return {
       headline:
         urgent > 0
-          ? `Hay ${urgent} punto${urgent > 1 ? "s" : ""} urgente${urgent > 1 ? "s" : ""} por atender`
-          : "Tu app necesita mejoras de seguridad",
-      body: "Abrí cada área de abajo para entender qué encontramos y qué podés hacer, sin tecnicismos innecesarios.",
+          ? `Tenés ${urgent} misión${urgent > 1 ? "es" : ""} urgente${urgent > 1 ? "s" : ""}`
+          : "Tu app necesita refuerzos de seguridad",
+      body: "No te asustes: abrí cada área, leé la historia de cada alerta y seguí el plan de acción paso a paso.",
     };
   }
 
   if (result.trafficLight === "yellow") {
     return {
-      headline: "Tu app está aceptable, pero hay margen de mejora",
-      body: "Revisá las áreas marcadas y planificá correcciones cuando puedas.",
+      headline: "Vas bien, pero hay tareas por hacer",
+      body: "Revisá las áreas amarillas cuando puedas. Cada una te enseña qué mejorar y por qué.",
     };
   }
 
   return {
-    headline: "Tu app se ve bastante bien",
-    body: "Hay algunos detalles menores. Cada categoría explica qué significan y cómo mejorarlos.",
+    headline: "Casi perfecto — detalles menores",
+    body: "Son buenos hábitos de seguridad. Aprendé con cada misión y mejorá con calma.",
   };
 }
 
@@ -56,8 +73,8 @@ type Props = {
 
 export function AnalysisResultsView({ result, onNewAnalysis }: Props) {
   const totalFindings = result.findings.length;
-  const urgentCount = countUrgent(result);
-  const summary = summaryCopy(result, totalFindings, urgentCount);
+  const { urgent, important, minor } = countBySeverity(result);
+  const summary = summaryCopy(result, totalFindings, urgent);
 
   const categories = useMemo(() => {
     if (result.categories.length > 0) return result.categories;
@@ -101,14 +118,14 @@ export function AnalysisResultsView({ result, onNewAnalysis }: Props) {
           <span className="material-symbols-outlined text-[18px]" data-icon="arrow_back">
             arrow_back
           </span>
-          Hacer otro análisis
+          Nuevo escaneo
         </button>
         {result.usedAiExplanation && (
           <span className="text-[12px] text-on-surface-variant flex items-center gap-xs">
             <span className="material-symbols-outlined text-[16px] text-primary" data-icon="auto_awesome">
               auto_awesome
             </span>
-            Explicaciones adaptadas a tu caso
+            Explicaciones personalizadas con IA
           </span>
         )}
       </div>
@@ -120,6 +137,12 @@ export function AnalysisResultsView({ result, onNewAnalysis }: Props) {
         totalCategories={categories.length}
         filesProcessed={result.limits.filesProcessed}
       />
+
+      {totalFindings > 0 && (
+        <MissionSummary urgent={urgent} important={important} minor={minor} />
+      )}
+
+      <LearningJourney />
 
       {result.limits.filesProcessed > 0 && (
         <section className="w-full space-y-xs px-sm">
@@ -151,37 +174,33 @@ export function AnalysisResultsView({ result, onNewAnalysis }: Props) {
 
       {result.limits.truncated && (
         <p className="text-[13px] text-on-surface-variant px-sm">
-          Analizamos una parte del proyecto por límites de tamaño. Si tu repo es grande, probá
-          enfocarte en carpetas críticas o subí un ZIP más pequeño.
+          Analizamos una parte del proyecto por límites de tamaño. Si tu repo es grande, probá un
+          ZIP más pequeño o carpetas críticas.
         </p>
       )}
 
       <section className="w-full min-w-0 space-y-md">
         <div className="w-full">
           <h3 className="font-headline-md text-headline-md text-on-surface flex items-center gap-xs">
-            <span className="material-symbols-outlined text-primary shrink-0" data-icon="category">
-              category
+            <span className="text-xl" aria-hidden>
+              🗺️
             </span>
-            Problemas por área de seguridad
+            Mapa de misiones por área
           </h3>
           <p className="text-[14px] text-on-surface-variant mt-xs w-full max-w-3xl leading-relaxed">
-            Cada bloque agrupa alertas del mismo tipo. Tocá una categoría para ver el detalle de
-            cada problema y qué podés hacer.
+            Cada tarjeta es un tipo de riesgo. Tocala para aprender qué encontramos y cómo
+            corregirlo, sin necesidad de ser programador.
           </p>
         </div>
 
         {categories.length === 0 && result.limits.filesProcessed > 0 ? (
           <div className="py-xl text-center rounded-xl border border-outline-variant bg-surface-container-low">
-            <span
-              className="material-symbols-outlined text-[48px] text-primary mb-md block mx-auto"
-              data-icon="verified_user"
-            >
-              verified_user
+            <span className="text-5xl mb-md block" aria-hidden>
+              🏆
             </span>
-            <p className="text-on-surface font-headline-md">No hay alertas que mostrar</p>
+            <p className="text-on-surface font-headline-md">¡Sin misiones pendientes!</p>
             <p className="text-on-surface-variant text-[14px] mt-xs w-full max-w-md mx-auto">
-              Seguí buenas prácticas al desplegar y volvé a escanear cuando cambies algo
-              importante.
+              Tu escudo se ve sólido. Volvé a escanear cuando hagas cambios grandes.
             </p>
           </div>
         ) : (
@@ -194,8 +213,8 @@ export function AnalysisResultsView({ result, onNewAnalysis }: Props) {
       </section>
 
       <p className="text-[12px] text-outline text-center w-full max-w-2xl mx-auto px-sm leading-relaxed">
-        VibeGuard es una guía educativa, no reemplaza una auditoría profesional. Antes de manejar
-        datos reales de usuarios, consultá con alguien de seguridad si tenés dudas.
+        VibeGuard es tu guía para aprender seguridad paso a paso. No reemplaza una auditoría
+        profesional si manejás datos sensibles de muchas personas.
       </p>
     </div>
   );
