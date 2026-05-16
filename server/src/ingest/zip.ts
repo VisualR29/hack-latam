@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import unzipper from "unzipper";
 import { shouldIncludePath, applyGlobalLimits } from "./filters.js";
+import { log } from "../util/logger.js";
 import type { FileSnapshot, IngestOutcome } from "./types.js";
 
 function isSafeExtractPath(extractRoot: string, targetPath: string): boolean {
@@ -13,9 +14,12 @@ function isSafeExtractPath(extractRoot: string, targetPath: string): boolean {
 export async function ingestZipFile(
   zipPath: string,
   extractRoot: string,
+  reqId?: string,
 ): Promise<IngestOutcome> {
   const warnings: string[] = [];
   const collected: FileSnapshot[] = [];
+
+  log.debug("ingest.zip.start", "Extrayendo ZIP", { reqId, zipPath, extractRoot });
 
   await fs.mkdir(extractRoot, { recursive: true });
 
@@ -58,5 +62,14 @@ export async function ingestZipFile(
     collected,
     warnings,
   );
+
+  log.info("ingest.zip.done", "ZIP procesado", {
+    reqId,
+    entriesRead: collected.length,
+    filesKept: files.length,
+    warnings: w2.length,
+    truncated,
+  });
+
   return { files, warnings: w2, truncated };
 }
