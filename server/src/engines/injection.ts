@@ -162,7 +162,7 @@ const RULES: InjectionRule[] = [
     severity: "low",
     owaspId: "A03",
     langs: /\.(js|ts|py|java)$/i,
-    regex: /(?:logger|console|log|info|error|warn|debug)\s*\(\s*['""`][\s\S]{0,100}(?:\$\{|userInput|req\.|message)/gi,
+    regex: /(?:console|logger)\.\w+\s*\(\s*`[^`]*\$\{(?:req\.|userInput|params|body|query|args)/gi,
     description: () =>
       "Se loguea input del usuario sin sanitizar. Newlines pueden inyectar entries falsas en logs.",
     fixRecommendation:
