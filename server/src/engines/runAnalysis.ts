@@ -80,7 +80,7 @@ export async function runPipeline(
     ...ssrf,
   ];
 
-  const { findings: deduped, riskScore, trafficLight } =
+  const { findings: deduped, riskScore, secureScore, trafficLight } =
     aggregateRisk(mergedFindingsRaw);
 
   log.info("pipeline.aggregate", "Hallazgos agregados", {
@@ -88,6 +88,7 @@ export async function runPipeline(
     rawCount: mergedFindingsRaw.length,
     dedupedCount: deduped.length,
     riskScore,
+    secureScore,
     trafficLight,
   });
 
@@ -113,6 +114,7 @@ export async function runPipeline(
 
   return {
     riskScore,
+    secureScore,
     trafficLight,
     findings: enriched.findings,
     categories,

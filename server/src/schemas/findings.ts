@@ -54,6 +54,7 @@ export type AnalysisLimits = z.infer<typeof AnalysisLimitsSchema>;
 
 export const AnalysisResultSchema = z.object({
   riskScore: z.number().min(0).max(100),
+  secureScore: z.number().min(0).max(100),
   trafficLight: TrafficLightSchema,
   findings: z.array(FindingSchema),
   categories: z.array(z.object({

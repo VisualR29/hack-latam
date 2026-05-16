@@ -62,6 +62,7 @@ La API regresa **un solo objeto JSON** con esta estructura:
 ```json
 {
   "riskScore": 100,
+  "secureScore": 0,
   "trafficLight": "red",
   "categories": [ ... ],
   "findings": [ ... ],
@@ -74,9 +75,10 @@ La API regresa **un solo objeto JSON** con esta estructura:
 
 | Campo | Tipo | Descripción |
 |-------|------|-------------|
-| `riskScore` | `number` (0-100) | Puntuación de riesgo. 0 = seguro, 100 = muy peligroso |
-| `trafficLight` | `"green"` \| `"yellow"` \| `"red"` | El semáforo: verde (≤28), amarillo (≤62), rojo (>62) |
-| `categories` | `array` | **⭐ NUEVO** — Vulnerabilidades agrupadas por tipo OWASP. Esto es lo que deben usar para el desplegable |
+| `riskScore` | `number` (0-100) | Puntuación de riesgo interno. 0 = seguro, 100 = muy peligroso. **No mostrar al usuario**, es solo para cálculos internos |
+| `secureScore` | `number` (0-100) | **⭐ Puntuación de seguridad para mostrar al usuario.** 100 = totalmente seguro, 0 = muy peligroso. Es `100 - riskScore` |
+| `trafficLight` | `"green"` \| `"yellow"` \| `"red"` | El semáforo basado en secureScore: verde (≥72), amarillo (≥38), rojo (<38) |
+| `categories` | `array` | Vulnerabilidades agrupadas por tipo OWASP. Usar para los desplegables |
 | `findings` | `array` | Lista plana de TODAS las vulnerabilidades individuales (por si lo necesitan) |
 | `limits` | `object` | Info sobre cuántos archivos se procesaron |
 | `usedAiExplanation` | `boolean` | Si OpenAI enriqueció las explicaciones o no |
@@ -170,6 +172,7 @@ Así se ve una respuesta real cuando se escanea código inseguro:
 ```json
 {
   "riskScore": 100,
+  "secureScore": 0,
   "trafficLight": "red",
   "categories": [
     {
@@ -252,7 +255,7 @@ Así se ve una respuesta real cuando se escanea código inseguro:
 
 ```
 ┌─────────────────────────────────────────────────┐
-│  🔴 Puntuación: 100/100  —  CRÍTICO             │
+│  🔴 Seguridad: 0/100  —  CRÍTICO                │
 │  Se encontraron 73 vulnerabilidades en 8 áreas  │
 └─────────────────────────────────────────────────┘
 
@@ -290,9 +293,9 @@ function ResultsView({ result }: { result: AnalysisResult }) {
 
   return (
     <div>
-      {/* Semáforo */}
+      {/* Semáforo — usar secureScore para mostrar al usuario */}
       <ScoreCard
-        riskScore={result.riskScore}
+        secureScore={result.secureScore}
         trafficLight={result.trafficLight}
         totalFindings={result.findings.length}
         totalCategories={result.categories.length}
@@ -386,9 +389,10 @@ type GroupedCategory = {
 };
 
 type AnalysisResult = {
-  riskScore: number;              // 0-100
-  trafficLight: TrafficLight;     // "green" | "yellow" | "red"
-  categories: GroupedCategory[];  // ⭐ Usar para la vista principal
+  riskScore: number;              // 0-100 (interno, no mostrar)
+  secureScore: number;            // ⭐ 0-100 (mostrar al usuario: 100 = seguro)
+  trafficLight: TrafficLight;     // basado en secureScore
+  categories: GroupedCategory[];  // Usar para la vista principal
   findings: Finding[];            // Lista plana (retrocompatible)
   limits: {
     filesProcessed: number;
@@ -407,7 +411,7 @@ type AnalysisResult = {
 | Quiero mostrar... | Uso este campo |
 |---|---|
 | El semáforo (verde/amarillo/rojo) | `result.trafficLight` |
-| La puntuación (0-100) | `result.riskScore` |
+| La puntuación de seguridad (0-100) | `result.secureScore` ⭐ |
 | Las categorías del desplegable | `result.categories` |
 | El nombre amigable de cada categoría | `categories[n].name` |
 | Cuántas vulns hay por categoría | `categories[n].count` |
@@ -416,3 +420,8 @@ type AnalysisResult = {
 | Dónde está el problema | `finding.file` y `finding.line` |
 | Cómo arreglarlo | `finding.fixRecommendation` |
 | Explicación educativa | `finding.educational` |
+
+> [!IMPORTANT]
+> **`secureScore`** es lo que se muestra al usuario. Alto = seguro (verde), bajo = peligroso (rojo).
+> **`riskScore`** es el inverso y se usa internamente. NO mostrarlo al usuario para no confundir.
+
