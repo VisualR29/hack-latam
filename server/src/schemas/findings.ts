@@ -56,10 +56,25 @@ export const AnalysisResultSchema = z.object({
   riskScore: z.number().min(0).max(100),
   trafficLight: TrafficLightSchema,
   findings: z.array(FindingSchema),
+  categories: z.array(z.object({
+    owaspId: OwaspIdSchema,
+    name: z.string(),
+    description: z.string(),
+    count: z.number(),
+    severitySummary: z.object({
+      high: z.number(),
+      medium: z.number(),
+      low: z.number(),
+    }),
+    worstSeverity: SeveritySchema,
+    findings: z.array(FindingSchema),
+  })),
   limits: AnalysisLimitsSchema,
   usedAiExplanation: z.boolean(),
 });
 export type AnalysisResult = z.infer<typeof AnalysisResultSchema>;
+
+export type GroupedCategory = AnalysisResult["categories"][number];
 
 export const RawAnalyzeBodySchema = z.object({
   mode: z.literal("raw"),

@@ -14,6 +14,7 @@ import { runAuthFailuresEngine } from "./authFailures.js";
 import { runLoggingEngine } from "./logging.js";
 import { runSSRFEngine } from "./ssrf.js";
 import { aggregateRisk } from "./riskAggregator.js";
+import { groupFindingsByOwasp } from "./owaspGrouper.js";
 
 type PipelineMeta = Pick<AnalysisLimits, "warnings" | "truncated"> & {
   reqId?: string;
@@ -108,10 +109,13 @@ export async function runPipeline(
     warnings: limitsMeta.warnings,
   };
 
+  const categories = groupFindingsByOwasp(enriched.findings);
+
   return {
     riskScore,
     trafficLight,
     findings: enriched.findings,
+    categories,
     limits,
     usedAiExplanation: enriched.usedAiExplanation,
   };
