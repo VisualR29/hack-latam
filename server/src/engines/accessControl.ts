@@ -64,7 +64,7 @@ const RULES: AccessControlRule[] = [
     severity: "medium",
     owaspId: "A01",
     langs: /\.(ts|tsx|js)$/i,
-    regex: /(?:app\.|router\.)\s*(?:get|post)\s*\(\s*['"`]\s*(?:\/secret|\/private|\/admin|\/reset|\/passwd|\/download)[^'"`]*['"`]\s*,\s*(?!auth|middleware|verify|JWT|guard|require)/gi,
+    regex: /(?:app\.|router\.)\s*(?:get|post)\s*\(\s*['"`]\s*(?:\/secret|\/private|\/admin|\/reset|\/passwd|\/download)[^'"`]*['"`]/gi,
     description: () =>
       "Ruta con nombre 'secret', 'private', 'admin' etc detectada sin middleware de protección aparente.",
     fixRecommendation:
@@ -128,6 +128,13 @@ export function runAccessControlEngine(files: FileSnapshot[]): Finding[] {
         const idx = m.index;
         const { line, column } = lineAndColumn(file.content, idx);
         const snippet = file.content.slice(idx, idx + 100).replace(/\s+/g, " ").slice(0, 100);
+
+        // Post-match: para PUBLIC_SENSITIVE, verificar si hay middleware auth en la definición de ruta
+        if (rule.ruleId === "ACCESSCONTROL_PUBLIC_SENSITIVE") {
+          const routeContext = file.content.slice(idx, idx + 300);
+          const authMiddlewarePattern = /(?:auth|verify|guard|require|protect|ensureAuth|isAuth|authenticate|limiter|session|JWT|passport)/i;
+          if (authMiddlewarePattern.test(routeContext)) continue;
+        }
 
         out.push({
           id: findingFingerprint([rule.ruleId, file.path, line, column, snippet]),
