@@ -56,6 +56,27 @@ type AnalysisResult = {
 
 type Tab = "raw" | "zip" | "github";
 
+type StoredAnalysis = AnalysisResult & {
+  id: string;
+  timestamp: number;
+  tab: Tab;
+  label?: string;
+};
+
+type Settings = {
+  persistHistory: boolean;
+};
+
+type User = {
+  email: string;
+};
+
+type Notification = {
+  id: string;
+  title: string;
+  body?: string;
+  ts: number;
+};
 const OWASP_TITLE: Record<OwaspId, string> = {
   A01: "Control de acceso",
   A02: "Mal configuración de seguridad",
@@ -81,6 +102,21 @@ function getSeverityStyles(severity: Severity) {
   }
 }
 
+function LoginForm({ onLogin }: { onLogin: (u: User) => void }) {
+  const [email, setEmail] = useState("");
+  return (
+    <form onSubmit={(e) => { e.preventDefault(); if (email.trim()) onLogin({ email: email.trim() }); }} className="space-y-md">
+      <div>
+        <label className="font-label-caps text-[12px]">Email</label>
+        <input className="w-full mt-xs px-sm py-xs rounded border border-outline-variant bg-surface-container-high" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@company.com" />
+      </div>
+      <div className="flex justify-end">
+        <button className="bg-primary text-on-primary px-md py-xs rounded font-bold">Iniciar sesión</button>
+      </div>
+    </form>
+  );
+}
+
 export default function App() {
   const [tab, setTab] = useState<Tab>("raw");
   const [code, setCode] = useState("");
@@ -91,6 +127,24 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<AnalysisResult | null>(null);
 
+  // UI panels & persisted state
+  const [showHistory, setShowHistory] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [showLogin, setShowLogin] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
+
+  const [history, setHistory] = useState<StoredAnalysis[]>([]);
+  const [settings, setSettings] = useState<Settings>({ persistHistory: true });
+  const [user, setUser] = useState<User | null>(null);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    try {
+      const saved = localStorage.getItem('vg_theme');
+      if (saved === 'light' || saved === 'dark') return saved;
+      if (typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) return 'dark';
+    } catch (e) {}
+    return 'dark';
+  });
   const [linesArray, setLinesArray] = useState([1]);
 
   useEffect(() => {
@@ -99,6 +153,45 @@ export default function App() {
       setLinesArray(Array.from({ length: Math.max(12, lines) }, (_, i) => i + 1));
     }
   }, [code, linesArray.length]);
+
+  // Load persisted UI state
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('vg_history');
+      if (raw) setHistory(JSON.parse(raw));
+    } catch (e) {
+      // ignore
+    }
+    try {
+      const raw = localStorage.getItem('vg_settings');
+      if (raw) setSettings(JSON.parse(raw));
+    } catch (e) {}
+    try {
+      const raw = localStorage.getItem('vg_user');
+      if (raw) setUser(JSON.parse(raw));
+    } catch (e) {}
+    try {
+      const raw = localStorage.getItem('vg_notifications');
+      if (raw) setNotifications(JSON.parse(raw));
+    } catch (e) {}
+    // apply theme class
+    try {
+      document.documentElement.classList.toggle('dark', theme === 'dark');
+      document.documentElement.classList.toggle('light', theme === 'light');
+    } catch (e) {}
+  }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('vg_theme', theme);
+      document.documentElement.classList.toggle('dark', theme === 'dark');
+      document.documentElement.classList.toggle('light', theme === 'light');
+    } catch (e) {}
+  }, [theme]);
+
+  function toggleTheme() {
+    setTheme((t) => (t === 'dark' ? 'light' : 'dark'));
+  }
 
   async function onSubmit(event?: FormEvent) {
     if (event) event.preventDefault();
@@ -206,6 +299,30 @@ export default function App() {
       });
 
       setResult(payload);
+      // Guardar en historial local y crear notificación
+      try {
+        const item: StoredAnalysis = {
+          ...payload,
+          id: String(Date.now()),
+          timestamp: Date.now(),
+          tab,
+          label: tab === 'raw' ? filename : tab === 'github' ? repoUrl : zipFile?.name,
+        };
+        setHistory((prev) => {
+          const next = [item, ...prev].slice(0, 50);
+          if (settings.persistHistory) localStorage.setItem('vg_history', JSON.stringify(next));
+          return next;
+        });
+
+        const note: Notification = { id: String(Date.now() + 1), title: `Análisis completado — ${payload.riskScore}%`, ts: Date.now(), body: `${payload.findings.length} hallazgos` };
+        setNotifications((prev) => {
+          const n = [note, ...prev].slice(0, 50);
+          localStorage.setItem('vg_notifications', JSON.stringify(n));
+          return n;
+        });
+      } catch (e) {
+        // ignore
+      }
     } catch (err) {
       setResult(null);
       const message =
@@ -245,6 +362,7 @@ export default function App() {
           <a
             className="flex items-center gap-sm px-sm py-sm transition-colors duration-200 ease-in-out text-on-surface-variant hover:bg-surface-bright hover:text-primary group"
             href="#"
+            onClick={(e) => { e.preventDefault(); setShowHistory(true); }}
           >
             <span className="material-symbols-outlined" data-icon="history">history</span>
             <span className="font-label-caps text-label-caps">Historial de Seguridad</span>
@@ -272,11 +390,16 @@ export default function App() {
           </div>
           <div className="flex items-center gap-lg">
             <div className="flex items-center gap-md">
-              <button className="material-symbols-outlined text-on-surface hover:text-primary transition-colors scale-95 active:scale-90" data-icon="notifications">notifications</button>
-              <button className="material-symbols-outlined text-on-surface hover:text-primary transition-colors scale-95 active:scale-90" data-icon="settings">settings</button>
+              <button onClick={toggleTheme} title={theme === 'dark' ? 'Cambiar a claro' : 'Cambiar a oscuro'} className="material-symbols-outlined text-on-surface hover:text-primary transition-colors scale-95 active:scale-90">
+                {theme === 'dark' ? 'light_mode' : 'dark_mode'}
+              </button>
+              <button onClick={() => setShowNotifications((s) => !s)} className="material-symbols-outlined text-on-surface hover:text-primary transition-colors scale-95 active:scale-90" data-icon="notifications">notifications</button>
+              <button onClick={() => setShowSettings(true)} className="material-symbols-outlined text-on-surface hover:text-primary transition-colors scale-95 active:scale-90" data-icon="settings">settings</button>
             </div>
             <div className="w-8 h-8 rounded-full bg-surface-variant border border-outline-variant overflow-hidden hidden md:block">
-              <span className="material-symbols-outlined text-outline flex items-center justify-center h-full w-full">person</span>
+              <button className="w-full h-full flex items-center justify-center" onClick={() => setShowLogin(true)}>
+                <span className="material-symbols-outlined text-outline">person</span>
+              </button>
             </div>
           </div>
         </header>
@@ -512,12 +635,102 @@ export default function App() {
             <span className="material-symbols-outlined" data-icon="dashboard">dashboard</span>
             <span className="text-[10px] font-label-caps">Panel</span>
           </a>
-          <a className="flex flex-col items-center text-on-surface-variant" href="#">
+          <a className="flex flex-col items-center text-on-surface-variant" href="#" onClick={(e) => { e.preventDefault(); setShowHistory(true); }}>
             <span className="material-symbols-outlined" data-icon="history">history</span>
             <span className="text-[10px] font-label-caps">Historial</span>
           </a>
         </nav>
       </div>
+
+      {/* Panels: History, Settings, Login, Notifications */}
+      {showHistory && (
+        <div className="fixed inset-0 bg-black/40 z-60 flex" onClick={() => setShowHistory(false)}>
+          <div className="ml-auto w-96 min-w-[320px] h-full bg-surface-container p-md overflow-y-auto border-l border-outline-variant" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-md">
+              <h3 className="font-headline-md">Historial</h3>
+              <div className="flex items-center gap-sm">
+                <button className="text-on-surface-variant" onClick={() => { setHistory([]); localStorage.removeItem('vg_history'); }}>Limpiar</button>
+                <button className="text-primary font-bold" onClick={() => setShowHistory(false)}>Cerrar</button>
+              </div>
+            </div>
+            {history.length === 0 ? (
+              <p className="text-on-surface-variant">Aún no hay análisis en el historial.</p>
+            ) : (
+              <div className="space-y-sm">
+                {history.map((h) => (
+                  <button key={h.id} className="w-full text-left p-sm rounded hover:bg-surface-container-high border border-outline-variant flex items-center justify-between" onClick={() => { setResult(h); setShowHistory(false); }}>
+                    <div>
+                      <div className="font-label-caps text-[12px]">{h.label ?? h.tab}</div>
+                      <div className="text-[13px] text-on-surface-variant">{new Date(h.timestamp).toLocaleString()} — {h.riskScore}%</div>
+                    </div>
+                    <div className="text-[12px] font-label-caps text-on-surface-variant">{h.findings.length} hallazgos</div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {showSettings && (
+        <div className="fixed inset-0 bg-black/40 z-60 flex items-center justify-center" onClick={() => setShowSettings(false)}>
+          <div className="w-full max-w-lg min-w-[420px] bg-surface-container p-lg rounded shadow-lg" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-md">
+              <h3 className="font-headline-md">Ajustes</h3>
+              <button className="text-on-surface-variant" onClick={() => setShowSettings(false)}>Cerrar</button>
+            </div>
+            <div className="space-y-md">
+              <div className="flex items-start gap-md">
+                <div className="flex-1 min-w-0">
+                  <div className="font-label-caps text-[12px]">Guardar historial</div>
+                  <div className="text-[13px] text-on-surface-variant truncate">Guarda los resultados en el dispositivo</div>
+                </div>
+                <div className="flex items-center">
+                  <label className="inline-flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={settings.persistHistory}
+                      onChange={(e) => { const s = { ...settings, persistHistory: e.target.checked }; setSettings(s); localStorage.setItem('vg_settings', JSON.stringify(s)); }}
+                      className="w-5 h-5 rounded border border-outline-variant bg-surface-container-high"
+                    />
+                  </label>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showLogin && (
+        <div className="fixed inset-0 bg-black/40 z-60 flex items-center justify-center" onClick={() => setShowLogin(false)}>
+          <div className="w-full max-w-sm min-w-[360px] bg-surface-container p-lg rounded shadow-lg" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-md">
+              <h3 className="font-headline-md">Iniciar Sesión</h3>
+              <button className="text-on-surface-variant" onClick={() => setShowLogin(false)}>Cerrar</button>
+            </div>
+            <LoginForm onLogin={(u) => { setUser(u); localStorage.setItem('vg_user', JSON.stringify(u)); setShowLogin(false); }} />
+          </div>
+        </div>
+      )}
+
+      {showNotifications && (
+        <div className="fixed right-4 top-16 w-80 bg-surface-container p-sm rounded border border-outline-variant shadow-lg z-60">
+          <div className="flex items-center justify-between mb-xs">
+            <div className="font-label-caps text-[12px]">Notificaciones</div>
+            <button className="text-on-surface-variant text-[12px]" onClick={() => { setNotifications([]); localStorage.removeItem('vg_notifications'); }}>Limpiar</button>
+          </div>
+          <div className="space-y-xs max-h-64 overflow-y-auto">
+            {notifications.length === 0 && <div className="text-on-surface-variant">No hay notificaciones.</div>}
+            {notifications.map(n => (
+              <div key={n.id} className="p-xs rounded hover:bg-surface-container-high border border-outline-variant">
+                <div className="font-body-md">{n.title}</div>
+                <div className="text-[12px] text-on-surface-variant">{n.body}</div>
+                <div className="text-[11px] text-on-surface-variant mt-xs">{new Date(n.ts).toLocaleTimeString()}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Visual Polish: Background Aura */}
       <div className="fixed top-0 right-0 w-[600px] h-[600px] bg-primary/5 blur-[120px] rounded-full -z-10 pointer-events-none"></div>
