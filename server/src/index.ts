@@ -24,7 +24,8 @@ import { JsonAnalyzeBodySchema } from "./schemas/findings.js";
 import { runPipeline } from "./engines/runAnalysis.js";
 import { log, newRequestId, startTimer } from "./util/logger.js";
 
-dotenv.config();
+// override: true — si Windows/shell ya define GITHUB_TOKEN (viejo), .env debe ganar.
+dotenv.config({ override: true });
 
 const PORT = Number(process.env.PORT) || 8787;
 const rawClientOrigin =
