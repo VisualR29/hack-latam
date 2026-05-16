@@ -206,7 +206,7 @@ export function createApp() {
               )
             : await ingestGithubRepo(
                 bodyParse.data.url,
-                process.env.GITHUB_TOKEN?.trim(),
+                bodyParse.data.githubToken?.trim() || process.env.GITHUB_TOKEN?.trim(),
                 reqId,
               );
 

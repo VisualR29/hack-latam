@@ -8,3 +8,7 @@ dist/
 *.log
 **/stitch-export/
 *.timestamp-*
+supabase_schema.sql
+SUPABASE_SETUP.md
+SUPABASE_QUERIES.sql
+SUPABASE_INTEGRATION.md

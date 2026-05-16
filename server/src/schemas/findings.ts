@@ -70,6 +70,7 @@ export const RawAnalyzeBodySchema = z.object({
 export const GithubAnalyzeBodySchema = z.object({
   mode: z.literal("github"),
   url: z.string().url().max(2048),
+  githubToken: z.string().min(1).optional(),
 });
 
 export const JsonAnalyzeBodySchema = z.union([
