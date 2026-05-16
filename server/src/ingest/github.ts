@@ -3,6 +3,7 @@ import {
   MAX_TOTAL_CONTENT_BYTES,
 } from "../constants.js";
 import { shouldIncludePath, applyGlobalLimits } from "./filters.js";
+import { log } from "../util/logger.js";
 import type { FileSnapshot, IngestOutcome } from "./types.js";
 
 const GITHUB_HOST = "github.com";
@@ -35,17 +36,76 @@ async function ghFetch(
   const headers: Record<string, string> = {
     Accept: "application/vnd.github+json",
     "User-Agent": "VibeGuard-MVP",
+    "X-GitHub-Api-Version": "2022-11-28",
   };
   if (token) headers.Authorization = `Bearer ${token}`;
   return fetch(`https://api.github.com${path}`, { headers });
 }
 
+function messageForRepoError(status: number, tokenWasRejected: boolean): string {
+  if (status === 401) {
+    if (tokenWasRejected) {
+      return (
+        "GITHUB_TOKEN inválido, expirado o revocado. Creá un token nuevo en GitHub " +
+        "(Settings → Developer settings → Personal access tokens) con scope «repo», " +
+        "actualizá server/.env y reiniciá npm run dev. Para repos públicos podés dejar GITHUB_TOKEN vacío."
+      );
+    }
+    return "GitHub rechazó la autenticación (401).";
+  }
+  if (status === 403) {
+    return (
+      "GitHub limitó el acceso (403). Puede ser rate limit: esperá unos minutos o usá un GITHUB_TOKEN válido."
+    );
+  }
+  if (status === 404) {
+    return (
+      "Repositorio no encontrado o privado. Para repos privados necesitás un GITHUB_TOKEN válido con permiso de lectura (scope «repo»)."
+    );
+  }
+  return `GitHub respondió ${status} al leer el repositorio.`;
+}
+
+/** Si el token guardado es inválido, GitHub devuelve 401 incluso en repos públicos. Reintentamos sin token. */
+async function ghFetchWithTokenFallback(
+  path: string,
+  token: string | undefined,
+  reqId: string | undefined,
+  context: string,
+): Promise<{ response: Response; effectiveToken?: string; tokenRejected: boolean }> {
+  const first = await ghFetch(path, token);
+  if (first.status !== 401 || !token) {
+    return { response: first, effectiveToken: token, tokenRejected: false };
+  }
+
+  log.warn("ingest.github.token_rejected", "Token rechazado por GitHub; reintento sin autenticación", {
+    reqId,
+    context,
+    path,
+  });
+
+  const retry = await ghFetch(path, undefined);
+  return {
+    response: retry,
+    effectiveToken: retry.ok ? undefined : token,
+    tokenRejected: true,
+  };
+}
+
 export async function ingestGithubRepo(
   repoUrl: string,
   token?: string,
+  reqId?: string,
 ): Promise<IngestOutcome> {
+  log.info("ingest.github.start", "Ingesta desde GitHub", {
+    reqId,
+    repoUrl,
+    hasToken: Boolean(token),
+  });
+
   const parsed = parseGithubRepoUrl(repoUrl);
   if (!parsed) {
+    log.warn("ingest.github.invalid_url", "URL de GitHub inválida", { reqId, repoUrl });
     return {
       files: [],
       warnings: [
@@ -56,25 +116,50 @@ export async function ingestGithubRepo(
   }
 
   const { owner, repo } = parsed;
-  const repoRes = await ghFetch(`/repos/${owner}/${repo}`, token);
-  if (!repoRes.ok) {
-    const msg =
-      repoRes.status === 404
-        ? "Repositorio no encontrado o privado (el MVP solo soporta repos públicos sin token adicional)."
-        : `GitHub respondió ${repoRes.status} al leer el repositorio.`;
+  const repoAttempt = await ghFetchWithTokenFallback(
+    `/repos/${owner}/${repo}`,
+    token,
+    reqId,
+    "read_repo",
+  );
+  const authToken = repoAttempt.effectiveToken;
+
+  if (!repoAttempt.response.ok) {
+    const msg = messageForRepoError(
+      repoAttempt.response.status,
+      repoAttempt.tokenRejected,
+    );
+    log.warn("ingest.github.repo_failed", msg, {
+      reqId,
+      owner,
+      repo,
+      status: repoAttempt.response.status,
+      tokenRejected: repoAttempt.tokenRejected,
+    });
     return { files: [], warnings: [msg], truncated: false };
   }
-  const repoJson = (await repoRes.json()) as { default_branch?: string };
+  const repoJson = (await repoAttempt.response.json()) as { default_branch?: string };
   const branch = repoJson.default_branch || "main";
 
-  const treeRes = await ghFetch(
+  const treeAttempt = await ghFetchWithTokenFallback(
     `/repos/${owner}/${repo}/git/trees/${encodeURIComponent(branch)}?recursive=1`,
-    token,
+    authToken,
+    reqId,
+    "read_tree",
   );
+  const treeRes = treeAttempt.response;
   if (!treeRes.ok) {
+    const msg = messageForRepoError(treeRes.status, treeAttempt.tokenRejected);
+    log.warn("ingest.github.tree_failed", msg, {
+      reqId,
+      owner,
+      repo,
+      branch,
+      status: treeRes.status,
+    });
     return {
       files: [],
-      warnings: [`No se pudo listar archivos (${treeRes.status}).`],
+      warnings: [msg],
       truncated: false,
     };
   }
@@ -112,7 +197,7 @@ export async function ingestGithubRepo(
   const collected: FileSnapshot[] = [];
 
   async function fetchBlob(blobPath: string, sha: string): Promise<FileSnapshot | null> {
-    const r = await ghFetch(`/repos/${owner}/${repo}/git/blobs/${sha}`, token);
+    const r = await ghFetch(`/repos/${owner}/${repo}/git/blobs/${sha}`, authToken);
     if (!r.ok) return null;
     const j = (await r.json()) as { encoding?: string; content?: string };
     if (j.encoding !== "base64" || !j.content) return null;
@@ -149,14 +234,31 @@ export async function ingestGithubRepo(
     warnings.push(
       "Algunos archivos se omitieron por límites del MVP (tamaño, cantidad o respuesta incompleta de GitHub).",
     );
-    if (!token) {
+    if (!authToken) {
       warnings.push(
-        "Sin GITHUB_TOKEN, el límite de peticiones de GitHub puede ser bajo.",
+        "Sin GITHUB_TOKEN válido, el límite de peticiones de GitHub puede ser bajo.",
+      );
+    }
+    if (token && !authToken) {
+      warnings.push(
+        "Se ignoró GITHUB_TOKEN del .env porque GitHub lo rechazó (inválido o expirado). Actualizalo para repos privados.",
       );
     }
   }
 
   const limited = applyGlobalLimits(collected, warnings);
+
+  log.info("ingest.github.done", "Ingesta GitHub finalizada", {
+    reqId,
+    owner,
+    repo,
+    branch,
+    blobsConsidered: blobs.length,
+    filesKept: limited.files.length,
+    truncated: limited.truncated || treeTruncatedRemote,
+    warnings: limited.warnings.length,
+  });
+
   return {
     files: limited.files,
     warnings: limited.warnings,
