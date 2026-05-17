@@ -746,16 +746,16 @@ export default function App() {
                     </div>
                   )}
 
-                  <div className="flex items-center justify-between pt-sm border-t border-outline-variant">
-                    <div className="hidden sm:flex items-center gap-sm">
+                  <div className="flex items-center justify-between pt-sm border-t border-outline-variant gap-md">
+                    <div className="hidden sm:flex items-center gap-sm shrink-0">
                       <div className="flex items-center gap-xs px-sm py-xs bg-surface-container-highest rounded-full border border-outline-variant">
                         <div className="w-2 h-2 rounded-full bg-primary animate-pulse"></div>
                         <span className="font-label-caps text-[10px] text-on-surface-variant">Motor Activo</span>
                       </div>
                     </div>
-                    <div className="ml-auto flex flex-col items-end gap-xs">
+                    <div className="ml-auto flex flex-col items-end gap-xs min-w-0 flex-1 sm:flex-initial sm:max-w-md">
                       {loading && (
-                        <p className="text-[12px] text-on-surface-variant text-right max-w-xs leading-relaxed">
+                        <p className="text-[12px] text-on-surface-variant text-right leading-relaxed w-full sm:min-w-[16rem] max-w-md break-words">
                           Analizando tu proyecto…
                           {learningPremiumAvailable && (
                             <> Preparando hasta 3 cursos educativos (puede tardar 1–2 min).</>
@@ -765,7 +765,7 @@ export default function App() {
                       <button
                         type="submit"
                         disabled={loading}
-                        className="bg-[#2FEBD2] text-[#0c141a] px-xl py-sm rounded-lg font-label-caps text-label-caps font-bold hover:brightness-110 active:scale-95 transition-all flex items-center gap-sm shadow-[0_0_20px_rgba(47,235,210,0.2)] disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="bg-[#2FEBD2] text-[#0c141a] px-xl py-sm rounded-lg font-label-caps text-label-caps font-bold hover:brightness-110 active:scale-95 transition-all flex items-center gap-sm shadow-[0_0_20px_rgba(47,235,210,0.2)] disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
                       >
                         {loading ? (
                           <>
