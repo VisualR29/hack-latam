@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 
 import { useLearningProgress } from "../hooks/useLearningProgress";
+import { shuffleQuizQuestions } from "../util/shuffleQuiz";
 import type { CategoryLearningModule } from "../types/learning";
 import type { OwaspCategory } from "../types/analysis";
 import type { OwaspId } from "./FindingCard";
@@ -58,6 +59,11 @@ export function CategoryLearningPanel({
   const progress = getProgress(analysisId, category.owaspId);
   const owaspId = category.owaspId as OwaspId;
 
+  const displayQuiz = useMemo(() => {
+    if (!module) return [];
+    return shuffleQuizQuestions(module.quiz, `${analysisId}:${owaspId}`);
+  }, [module, analysisId, owaspId]);
+
   const checklistTotal = module?.checklist.length ?? 0;
   const checklistDone = progress.checklistDone.length;
   const lessonsTotal = module?.lessons.length ?? 0;
@@ -68,11 +74,11 @@ export function CategoryLearningPanel({
       return { correct: 0, total: module?.quiz.length ?? 0 };
     }
     let correct = 0;
-    for (const q of module.quiz) {
+    for (const q of displayQuiz) {
       if (progress.quizAnswers[q.id] === q.correctIndex) correct++;
     }
-    return { correct, total: module.quiz.length };
-  }, [module, progress.quizAnswers, progress.quizSubmitted]);
+    return { correct, total: displayQuiz.length };
+  }, [displayQuiz, progress.quizAnswers, progress.quizSubmitted]);
 
   const overallPct = useMemo(() => {
     if (!module) return 0;
@@ -213,7 +219,7 @@ export function CategoryLearningPanel({
           </span>
           Poné a prueba lo aprendido
         </h6>
-        {module.quiz.map((q, qi) => {
+        {displayQuiz.map((q, qi) => {
           const selected = progress.quizAnswers[q.id];
           const showResult = progress.quizSubmitted;
           const isCorrect = selected === q.correctIndex;
@@ -269,7 +275,7 @@ export function CategoryLearningPanel({
           <button
             type="button"
             onClick={() => submitQuiz(analysisId, owaspId)}
-            disabled={Object.keys(progress.quizAnswers).length < module.quiz.length}
+            disabled={Object.keys(progress.quizAnswers).length < displayQuiz.length}
             className="w-full sm:w-auto bg-surface-container-highest border border-primary/40 text-primary px-lg py-sm rounded-lg font-label-caps text-[12px] font-bold hover:bg-primary/10 disabled:opacity-40"
           >
             Ver resultados del quiz
