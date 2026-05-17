@@ -505,6 +505,6 @@ Proyecto desarrollado en el contexto de **Hack Latam** como herramienta de **con
 
 ---
 
-### Frase para presentación (30 segundos)
+### In a Nutshell
 
 > *VibeGuard es para quien crea apps con IA pero no es programador: revisamos lo que generaste, te damos un puntaje fácil de entender y te explicamos los riesgos en palabras simples, con lecciones y pasos concretos. No queremos convertirte en hacker — queremos que publiques con más conciencia y menos sustos.*
