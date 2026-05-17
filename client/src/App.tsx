@@ -241,14 +241,7 @@ export default function App() {
         const repos = await listGithubRepos(gitHubAccessToken);
         if (!mounted) return;
         setGithubRepos(repos || []);
-        if (repos && repos.length > 0) {
-          const firstRepo = repos[0];
-          setSelectedGithubRepo(
-            firstRepo.html_url ?? (firstRepo.full_name ? `https://github.com/${firstRepo.full_name}` : firstRepo.url ?? null),
-          );
-        } else {
-          setSelectedGithubRepo(null);
-        }
+        setSelectedGithubRepo(null);
       } catch (err) {
         if (!mounted) return;
         setGithubReposError(err instanceof Error ? err.message : 'No se pudieron cargar los repositorios de GitHub.');
@@ -375,9 +368,12 @@ export default function App() {
           }),
         });
       } else {
-        // prefer selected repo from authenticated user's repos
-        const targetUrl = selectedGithubRepo ?? repoUrl;
-        if (!targetUrl || !targetUrl.trim()) throw new Error("Selecciona un repositorio de GitHub o pega una URL válida.");
+        const targetUrl = repoUrl.trim() || selectedGithubRepo?.trim() || "";
+        if (!targetUrl) {
+          throw new Error(
+            "Seleccioná uno de tus repositorios o pegá la URL de un repo público (https://github.com/usuario/repo).",
+          );
+        }
 
         clientLog.debug("analyze.request", "POST github", {
           url: ANALYZE_URL,
@@ -672,32 +668,67 @@ export default function App() {
 
                   {tab === 'github' && (
                     <div className="space-y-md animate-fade-in">
-                      <div className="flex flex-col sm:flex-row items-center gap-sm">
-                        {githubReposLoading ? (
-                          <div className="flex-1 w-full bg-surface-container-high border border-outline-variant rounded-lg px-md py-sm text-on-surface-variant">Cargando repositorios de GitHub...</div>
-                        ) : githubRepos.length > 0 ? (
-                          <select className="flex-1 w-full bg-surface-container-high border border-outline-variant rounded-lg px-md py-sm font-code-sm text-code-sm text-on-surface focus:outline-none" value={selectedGithubRepo ?? ''} onChange={(e) => setSelectedGithubRepo(e.target.value)}>
-                            {githubRepos.map((r) => (
-                              <option key={r.id} value={r.html_url ?? (r.full_name ? `https://github.com/${r.full_name}` : r.url)}>{r.full_name ?? r.name}</option>
-                            ))}
-                          </select>
-                        ) : (
-                          <input
-                            className="flex-1 w-full bg-surface-container-high border border-outline-variant rounded-lg px-md py-sm font-code-sm text-code-sm text-on-surface focus:outline-none focus:border-primary"
-                            placeholder="https://github.com/usuario/repositorio"
-                            type="url"
-                            value={repoUrl}
-                            onChange={(e) => setRepoUrl(e.target.value)}
-                          />
-                        )}
+                      {gitHubAccessToken && (
+                        <div className="space-y-xs">
+                          <label className="block font-label-caps text-[11px] text-on-surface-variant">
+                            Mis repositorios
+                          </label>
+                          {githubReposLoading ? (
+                            <div className="w-full bg-surface-container-high border border-outline-variant rounded-lg px-md py-sm text-on-surface-variant">
+                              Cargando repositorios de GitHub...
+                            </div>
+                          ) : githubRepos.length > 0 ? (
+                            <select
+                              className="w-full bg-surface-container-high border border-outline-variant rounded-lg px-md py-sm font-code-sm text-code-sm text-on-surface focus:outline-none focus:border-primary"
+                              value={selectedGithubRepo ?? ""}
+                              onChange={(e) => {
+                                const value = e.target.value;
+                                setSelectedGithubRepo(value || null);
+                                if (value) setRepoUrl("");
+                              }}
+                            >
+                              <option value="">— Elegí uno de tus repos —</option>
+                              {githubRepos.map((r) => (
+                                <option
+                                  key={r.id}
+                                  value={
+                                    r.html_url ??
+                                    (r.full_name ? `https://github.com/${r.full_name}` : r.url)
+                                  }
+                                >
+                                  {r.full_name ?? r.name}
+                                </option>
+                              ))}
+                            </select>
+                          ) : !githubReposError ? (
+                            <p className="text-[12px] text-on-surface-variant">
+                              No se listaron repos en tu cuenta. Usá la URL de abajo.
+                            </p>
+                          ) : null}
+                        </div>
+                      )}
+
+                      <div className="space-y-xs">
+                        <label className="block font-label-caps text-[11px] text-on-surface-variant">
+                          {gitHubAccessToken ? "O URL de cualquier repositorio" : "URL del repositorio"}
+                        </label>
+                        <input
+                          className="w-full bg-surface-container-high border border-outline-variant rounded-lg px-md py-sm font-code-sm text-code-sm text-on-surface focus:outline-none focus:border-primary"
+                          placeholder="https://github.com/usuario/repositorio"
+                          type="url"
+                          value={repoUrl}
+                          onChange={(e) => setRepoUrl(e.target.value)}
+                        />
                       </div>
+
                       {githubReposError && (
                         <p className="text-[12px] text-error">{githubReposError}</p>
                       )}
-                      {!githubReposLoading && gitHubAccessToken && githubRepos.length === 0 && !githubReposError && (
-                        <p className="text-[12px] text-on-surface-variant">No se pudieron cargar repositorios. Pega una URL válida para analizarla manualmente.</p>
-                      )}
-                      <p className="font-body-md text-[12px] text-on-surface-variant italic">Si te conectaste con GitHub verás tus repositorios privados y públicos aquí.</p>
+                      <p className="font-body-md text-[12px] text-on-surface-variant italic leading-relaxed">
+                        {gitHubAccessToken
+                          ? "Con sesión de GitHub podés elegir tus repos (incluidos privados) o pegar la URL de un repo público ajeno."
+                          : "Pegá la URL de un repositorio público. Conectate con GitHub para analizar también tus repos privados."}
+                      </p>
                     </div>
                   )}
 
