@@ -22,6 +22,7 @@ import { ingestGithubRepo, ingestRaw, ingestZipFile } from "./ingest/index.js";
 import type { AnalysisResult } from "./schemas/findings.js";
 import { JsonAnalyzeBodySchema } from "./schemas/findings.js";
 import { runPipeline } from "./engines/runAnalysis.js";
+import { isLearningPremiumEnabled } from "./explain/learningEngine.js";
 import { log, newRequestId, startTimer } from "./util/logger.js";
 
 // override: true — si Windows/shell ya define GITHUB_TOKEN (viejo), .env debe ganar.
@@ -104,7 +105,11 @@ export function createApp() {
   });
 
   app.get("/health", (_req, res) => {
-    res.json({ ok: true, service: "vibeguard-server" });
+    res.json({
+      ok: true,
+      service: "vibeguard-server",
+      learningPremium: isLearningPremiumEnabled(),
+    });
   });
 
   app.post(

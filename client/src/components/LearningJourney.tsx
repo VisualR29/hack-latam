@@ -1,35 +1,44 @@
 const STEPS = [
   {
-    icon: "shield",
-    title: "Tu escudo",
-    body: "El número grande es qué tan protegida está tu app (0 = muy vulnerable, 100 = muy segura).",
+    icon: "speed",
+    title: "Tu puntaje",
+    body: "El número grande muestra qué tan protegida está tu app (0 = muy vulnerable, 100 = muy segura).",
   },
   {
-    icon: "map",
+    icon: "folder_open",
     title: "Las áreas",
-    body: "Cada tarjeta es un tipo de riesgo. Tocala para ver las misiones dentro.",
+    body: "Cada tarjeta agrupa un tipo de riesgo. Abrila para ver el resumen de cada hallazgo.",
   },
   {
-    icon: "task_alt",
-    title: "Tus misiones",
-    body: "Cada alerta explica qué pasó, por qué importa y qué hacer — sin jerga obligatoria.",
+    icon: "school",
+    title: "Aprendizaje",
+    body: "En la pestaña Aprendizaje encontrás lecciones simples, checklist y un quiz según tu análisis.",
   },
 ] as const;
 
-export function LearningJourney() {
+type Props = {
+  coursesAvailable?: number;
+};
+
+export function LearningJourney({ coursesAvailable = 0 }: Props) {
   return (
     <section
       className="rounded-xl border border-primary/25 bg-gradient-to-br from-primary/8 to-surface-container-low p-md md:p-lg"
       aria-label="Cómo leer tu informe"
     >
-      <div className="flex items-center gap-sm mb-md">
-        <span className="text-2xl" aria-hidden>
-          🎮
+      <div className="flex flex-wrap items-center gap-sm mb-md">
+        <span className="material-symbols-outlined text-primary text-[28px]" data-icon="info">
+          info
         </span>
-        <div>
-          <h3 className="font-headline-md text-[17px] text-on-surface">Cómo leer tu informe</h3>
-          <p className="text-[13px] text-on-surface-variant">Tres pasos, sin ser programador</p>
+        <div className="flex-1 min-w-0">
+          <h3 className="font-headline-md text-[17px] text-on-surface">Cómo usar este informe</h3>
+          <p className="text-[13px] text-on-surface-variant">Tres pasos en lenguaje simple</p>
         </div>
+        {coursesAvailable > 0 && (
+          <span className="text-[11px] font-label-caps px-sm py-0.5 rounded-full bg-primary/15 text-primary">
+            {coursesAvailable} curso{coursesAvailable !== 1 ? "s disponibles" : " disponible"}
+          </span>
+        )}
       </div>
 
       <ol className="grid grid-cols-1 md:grid-cols-3 gap-md">

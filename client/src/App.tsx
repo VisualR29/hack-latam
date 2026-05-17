@@ -5,6 +5,7 @@ import {
   type AnalysisResult,
 } from "./components/AnalysisResultsView";
 import { ANALYZE_URL } from "./config";
+import { fetchLearningPremiumAvailable } from "./services/learning-api";
 import {
   getCurrentSession,
   listGithubRepos,
@@ -99,6 +100,8 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<AnalysisResult | null>(null);
+  const [currentAnalysisId, setCurrentAnalysisId] = useState<string | null>(null);
+  const [learningPremiumAvailable, setLearningPremiumAvailable] = useState(false);
 
   // UI panels & persisted state
   const [showHistory, setShowHistory] = useState(false);
@@ -132,6 +135,10 @@ export default function App() {
       setLinesArray(Array.from({ length: Math.max(12, lines) }, (_, i) => i + 1));
     }
   }, [code, linesArray.length]);
+
+  useEffect(() => {
+    void fetchLearningPremiumAvailable().then(setLearningPremiumAvailable);
+  }, []);
 
   // Load persisted UI state
   useEffect(() => {
@@ -408,7 +415,12 @@ export default function App() {
         );
       }
 
-      const payload = (await response.json()) as AnalysisResult;
+      const raw = (await response.json()) as AnalysisResult;
+      const payload: AnalysisResult = {
+        ...raw,
+        learningPremium: raw.learningPremium ?? false,
+        learningModules: raw.learningModules ?? {},
+      };
 
       payload.findings.sort((a, b) => {
         const order: Record<Severity, number> = {
@@ -440,12 +452,14 @@ export default function App() {
         usedAiExplanation: payload.usedAiExplanation,
       });
 
+      const analysisId = String(Date.now());
+      setCurrentAnalysisId(analysisId);
       setResult(payload);
       // Guardar en historial local y crear notificación
       try {
         const item: StoredAnalysis = {
           ...payload,
-          id: String(Date.now()),
+          id: analysisId,
           timestamp: Date.now(),
           tab,
           label: tab === 'raw' ? filename : tab === 'github' ? (selectedGithubRepo ?? repoUrl) : zipFile?.name,
@@ -739,23 +753,37 @@ export default function App() {
                         <span className="font-label-caps text-[10px] text-on-surface-variant">Motor Activo</span>
                       </div>
                     </div>
-                    <button
-                      type="submit"
-                      disabled={loading}
-                      className="ml-auto bg-[#2FEBD2] text-[#0c141a] px-xl py-sm rounded-lg font-label-caps text-label-caps font-bold hover:brightness-110 active:scale-95 transition-all flex items-center gap-sm shadow-[0_0_20px_rgba(47,235,210,0.2)] disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {loading ? (
-                        <>
-                          <span className="material-symbols-outlined animate-spin" data-icon="sync">sync</span>
-                          Analizando...
-                        </>
-                      ) : (
-                        <>
-                          <span className="material-symbols-outlined" data-icon="shield_with_heart">shield_with_heart</span>
-                          Analizar
-                        </>
+                    <div className="ml-auto flex flex-col items-end gap-xs">
+                      {loading && (
+                        <p className="text-[12px] text-on-surface-variant text-right max-w-xs leading-relaxed">
+                          Analizando tu proyecto…
+                          {learningPremiumAvailable && (
+                            <> Preparando hasta 3 cursos educativos (puede tardar 1–2 min).</>
+                          )}
+                        </p>
                       )}
-                    </button>
+                      <button
+                        type="submit"
+                        disabled={loading}
+                        className="bg-[#2FEBD2] text-[#0c141a] px-xl py-sm rounded-lg font-label-caps text-label-caps font-bold hover:brightness-110 active:scale-95 transition-all flex items-center gap-sm shadow-[0_0_20px_rgba(47,235,210,0.2)] disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {loading ? (
+                          <>
+                            <span className="material-symbols-outlined animate-spin" data-icon="sync">
+                              sync
+                            </span>
+                            Analizando…
+                          </>
+                        ) : (
+                          <>
+                            <span className="material-symbols-outlined" data-icon="shield_with_heart">
+                              shield_with_heart
+                            </span>
+                            Analizar
+                          </>
+                        )}
+                      </button>
+                    </div>
                   </div>
                 </form>
               </div>
@@ -764,7 +792,12 @@ export default function App() {
 
             <AnalysisResultsView
               result={result}
-              onNewAnalysis={() => setResult(null)}
+              analysisId={currentAnalysisId ?? String(Date.now())}
+              userScope={user?.email ?? "guest"}
+              onNewAnalysis={() => {
+                setResult(null);
+                setCurrentAnalysisId(null);
+              }}
             />
           )}
         </main>
@@ -797,7 +830,7 @@ export default function App() {
             ) : (
               <div className="space-y-sm">
                 {history.map((h) => (
-                  <button key={h.id} className="w-full text-left p-sm rounded hover:bg-surface-container-high border border-outline-variant flex items-center justify-between" onClick={() => { setResult(h); setShowHistory(false); }}>
+                  <button key={h.id} className="w-full text-left p-sm rounded hover:bg-surface-container-high border border-outline-variant flex items-center justify-between" onClick={() => { setCurrentAnalysisId(h.id); setResult({ ...h, learningPremium: h.learningPremium ?? false, learningModules: h.learningModules ?? {} }); setShowHistory(false); }}>
                     <div>
                       <div className="font-label-caps text-[12px]">{h.label ?? h.tab}</div>
                       <div className="text-[13px] text-on-surface-variant">{new Date(h.timestamp).toLocaleString()} — seguridad {h.secureScore ?? 100 - h.riskScore}/100</div>

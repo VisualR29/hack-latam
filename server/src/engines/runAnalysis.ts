@@ -16,6 +16,10 @@ import { runSSRFEngine } from "./ssrf.js";
 import { aggregateRisk } from "./riskAggregator.js";
 import { groupFindingsByOwasp } from "./owaspGrouper.js";
 import { generateMarkdownReport } from "../util/exportMarkdown.js";
+import {
+  generateAnalysisLearning,
+  mergeLearningWarnings,
+} from "../explain/generateAnalysisLearning.js";
 
 type PipelineMeta = Pick<AnalysisLimits, "warnings" | "truncated"> & {
   reqId?: string;
@@ -113,14 +117,20 @@ export async function runPipeline(
 
   const categories = groupFindingsByOwasp(enriched.findings);
 
+  const learning = await generateAnalysisLearning(categories, reqId);
+  const limitsWithLearning = mergeLearningWarnings(limits, learning.warnings);
+
   return {
     riskScore,
     secureScore,
     trafficLight,
     findings: enriched.findings,
     categories,
-    limits,
+    limits: limitsWithLearning,
     usedAiExplanation: enriched.usedAiExplanation,
     markdownReport: generateMarkdownReport(categories),
+    learningPremium: learning.learningPremium,
+    learningModules: learning.learningModules,
+    learningMeta: learning.learningMeta,
   };
 }
