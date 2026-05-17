@@ -15,6 +15,7 @@ import { runLoggingEngine } from "./logging.js";
 import { runSSRFEngine } from "./ssrf.js";
 import { aggregateRisk } from "./riskAggregator.js";
 import { groupFindingsByOwasp } from "./owaspGrouper.js";
+import { generateMarkdownReport } from "../util/exportMarkdown.js";
 
 type PipelineMeta = Pick<AnalysisLimits, "warnings" | "truncated"> & {
   reqId?: string;
@@ -120,5 +121,6 @@ export async function runPipeline(
     categories,
     limits,
     usedAiExplanation: enriched.usedAiExplanation,
+    markdownReport: generateMarkdownReport(categories),
   };
 }

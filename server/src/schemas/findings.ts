@@ -72,6 +72,7 @@ export const AnalysisResultSchema = z.object({
   })),
   limits: AnalysisLimitsSchema,
   usedAiExplanation: z.boolean(),
+  markdownReport: z.string(),
 });
 export type AnalysisResult = z.infer<typeof AnalysisResultSchema>;
 

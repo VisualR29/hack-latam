@@ -29,4 +29,5 @@ export type AnalysisResult = {
     warnings: string[];
   };
   usedAiExplanation: boolean;
+  markdownReport?: string;
 };
