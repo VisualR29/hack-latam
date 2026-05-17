@@ -169,7 +169,7 @@ flowchart TB
     end
 
     subgraph Backend["Servidor (Express)"]
-        F[Ingesta: raw | zip | github]
+        F["Ingesta: texto, ZIP o GitHub"]
         G[Pipeline de motores]
         H[Agregación de riesgo]
         I[Explicaciones educativas]
@@ -178,7 +178,7 @@ flowchart TB
     end
 
     A --> B --> C --> F --> G --> H --> I --> J --> K
-    K --> C --> D --> E
+    K --> D --> E
 ```
 
 ### Flujo por modo de entrada
