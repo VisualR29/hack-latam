@@ -4,12 +4,96 @@
  * Maneja autenticación y operaciones de base de datos
  */
 
-import { createClient, SupabaseClient } from '@supabase/supabase-js'
+import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
 
-export const supabase: SupabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+type SupabaseDisabledError = { error: Error; data: null }
+
+function disabledError(): SupabaseDisabledError {
+  return { error: new Error("Supabase no está configurado en este entorno."), data: null }
+}
+
+function disabledFrom() {
+  return {
+    async upsert() {
+      return disabledError()
+    },
+    async select() {
+      return this
+    },
+    async single() {
+      return disabledError()
+    },
+    async eq() {
+      return this
+    },
+    async update() {
+      return this
+    },
+    async insert() {
+      return disabledError()
+    },
+    async delete() {
+      return this
+    },
+    async limit() {
+      return this
+    },
+    async order() {
+      return this
+    },
+    async ilike() {
+      return this
+    },
+    async in() {
+      return this
+    },
+    async maybeSingle() {
+      return disabledError()
+    },
+    async then(onFulfilled: (value: SupabaseDisabledError) => unknown) {
+      return Promise.resolve(disabledError()).then(onFulfilled)
+    },
+  }
+}
+
+function createDisabledSupabaseClient() {
+  const auth = {
+    async signInWithPassword() {
+      return disabledError()
+    },
+    async signUp() {
+      return disabledError()
+    },
+    async signInWithOAuth() {
+      return disabledError()
+    },
+    async signOut() {
+      return disabledError()
+    },
+    async getUser() {
+      return { data: { user: null }, error: new Error("Supabase no está configurado en este entorno.") }
+    },
+    async getSession() {
+      return { data: { session: null }, error: new Error("Supabase no está configurado en este entorno.") }
+    },
+    onAuthStateChange() {
+      return { data: { subscription: { unsubscribe() {} } } }
+    },
+  }
+
+  return {
+    auth,
+    from: disabledFrom,
+  } as unknown as SupabaseClient
+}
+
+export const supabase: SupabaseClient =
+  SUPABASE_URL && SUPABASE_ANON_KEY
+    ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+    : createDisabledSupabaseClient()
 
 // ==================== TIPOS ====================
 

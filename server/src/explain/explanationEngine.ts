@@ -9,6 +9,7 @@ const EducationalBlockSchema = z.object({
   why: z.string(),
   impact: z.string(),
   whoAffected: z.string(),
+  miniCourse: z.array(z.string()).optional(),
 });
 
 const EducationalItemSchema = z.object({
@@ -20,6 +21,24 @@ const FlexibleAiSchema = z.union([
   z.object({ items: z.array(EducationalItemSchema) }),
   z.object({ findings: z.array(EducationalItemSchema) }),
 ]);
+
+function miniCourseFor(finding: Finding): string[] {
+  const steps = finding.fixRecommendation
+    .split(/(?<=[.!?])\s+/)
+    .map((step) => step.trim())
+    .filter((step) => step.length > 8)
+    .slice(0, 4);
+
+  if (steps.length >= 2) {
+    return steps;
+  }
+
+  return [
+    `Identificá el punto exacto descrito en ${finding.file}${finding.line ? ` cerca de la línea ${finding.line}` : ""}.`,
+    finding.fixRecommendation,
+    "Volvé a correr el análisis y confirmá que el hallazgo desapareció sin romper la funcionalidad.",
+  ];
+}
 
 function readAiConfig(): {
   apiKey?: string;
@@ -77,7 +96,7 @@ async function refineWithOpenAi(
           {
             role: "system",
             content:
-              "Eres VibeGuard, traductora de seguridad para personas sin formación técnica profunda. Responde ÚNICAMENTE JSON con la forma estricta {\"items\":[{\"id\":\"coincidente\",\"educational\":{\"what\":\"\",\"why\":\"\",\"impact\":\"\",\"whoAffected\":\"\"}}]} en español LATAM neutro y claro. No inventes nuevas vulnerabilidades ni cambies reglas OWASP declaradas.",
+              "Eres VibeGuard, traductora de seguridad para personas sin formación técnica profunda. Responde ÚNICAMENTE JSON con la forma estricta {\"items\":[{\"id\":\"coincidente\",\"educational\":{\"what\":\"\",\"why\":\"\",\"impact\":\"\",\"whoAffected\":\"\",\"miniCourse\":[\"\"]}}]} en español LATAM neutro y claro. El bloque miniCourse debe tener entre 3 y 5 pasos cortos que enseñen cómo corregir el problema, verificar la corrección y evitar regresiones. No inventes nuevas vulnerabilidades ni cambies reglas OWASP declaradas.",
           },
           {
             role: "user",
@@ -181,7 +200,9 @@ export async function enrichFindingsEducation(
       refined.whoAffected;
 
     const educational: Educational =
-      hasFull && refined ? { ...tpl, ...refined } : tpl;
+      hasFull && refined
+        ? { ...tpl, ...refined, miniCourse: refined.miniCourse ?? miniCourseFor(f) }
+        : { ...tpl, miniCourse: miniCourseFor(f) };
 
     return { ...f, educational };
   });

@@ -25,6 +25,7 @@ export const EducationalSchema = z.object({
   why: z.string(),
   impact: z.string(),
   whoAffected: z.string(),
+  miniCourse: z.array(z.string()).optional(),
 });
 export type Educational = z.infer<typeof EducationalSchema>;
 
