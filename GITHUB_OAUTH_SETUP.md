@@ -64,25 +64,51 @@ async function handleGitHubLogin() {
 
 ## Paso 4: Configurar para Producción
 
-### En GitHub OAuth App:
-1. Ve a tu OAuth App nuevamente
-2. **Application settings** → **Authorization callback URLs**
-3. Cambia:
-   ```
-   http://localhost:5173/callback
-   ```
-   por:
-   ```
-   https://tubdominio.com/auth/callback
-   ```
+Si tras desplegar el login te manda a `http://localhost:3000`, casi siempre es la **Site URL** de Supabase (sigue en local). Corregilo así:
 
-### En Supabase:
-1. Ve a **Project Settings** → **API**
-2. Copia el **Project URL**
-3. En GitHub, usa:
+### En Supabase (obligatorio)
+
+1. **Authentication** → **URL Configuration**
+2. **Site URL**: tu dominio de producción, por ejemplo:
    ```
-   https://[TU_PROYECTO].supabase.co/auth/v1/callback
+   https://tu-app.vercel.app
    ```
+   (sin barra final; no uses `localhost:3000` en producción)
+3. **Redirect URLs** — agregá todas las que uses:
+   ```
+   https://tu-app.vercel.app/**
+   https://tu-app.vercel.app
+   http://localhost:5173/**
+   http://127.0.0.1:5173/**
+   ```
+4. Guardá cambios.
+
+Supabase solo redirige a URLs que estén en esa lista. Si la URL de tu app no está, vuelve al **Site URL** por defecto (a menudo `localhost:3000`).
+
+### En el hosting del frontend (Vercel, Netlify, etc.)
+
+Variables de entorno del **build**:
+
+```
+VITE_SUPABASE_URL=https://xxxx.supabase.co
+VITE_SUPABASE_ANON_KEY=eyJ...
+VITE_APP_URL=https://tu-app.vercel.app
+VITE_API_BASE_URL=https://tu-api.com
+```
+
+`VITE_APP_URL` debe ser la misma URL que pusiste en Supabase → Site URL.
+
+Volvé a desplegar después de cambiar variables (Vite las embebe en el build).
+
+### En GitHub OAuth App
+
+El **Authorization callback URL** de GitHub **no** es tu dominio: es siempre Supabase:
+
+```
+https://[TU_PROYECTO].supabase.co/auth/v1/callback
+```
+
+En **Homepage URL** podés poner `https://tu-app.vercel.app`.
 
 ---
 
