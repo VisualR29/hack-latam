@@ -69,10 +69,12 @@ function summaryCopy(result: AnalysisResult, totalFindings: number, urgent: numb
 
 type Props = {
   result: AnalysisResult;
+  analysisId: string;
+  userScope: string;
   onNewAnalysis: () => void;
 };
 
-export function AnalysisResultsView({ result, onNewAnalysis }: Props) {
+export function AnalysisResultsView({ result, analysisId, userScope, onNewAnalysis }: Props) {
   const totalFindings = result.findings.length;
   const { urgent, important, minor } = countBySeverity(result);
   const summary = summaryCopy(result, totalFindings, urgent);
@@ -113,6 +115,10 @@ export function AnalysisResultsView({ result, onNewAnalysis }: Props) {
 
   const secureScore =
     result.secureScore ?? Math.max(0, Math.min(100, 100 - (result.riskScore ?? 0)));
+
+  const learningPremium = result.learningPremium ?? false;
+  const learningModules = result.learningModules ?? {};
+  const coursesAvailable = Object.keys(learningModules).length;
 
   return (
     <div className="w-full min-w-0 max-w-5xl mx-auto space-y-lg animate-fade-in pb-xl">
@@ -164,12 +170,12 @@ export function AnalysisResultsView({ result, onNewAnalysis }: Props) {
         <MissionSummary urgent={urgent} important={important} minor={minor} />
       )}
 
-      <LearningJourney />
+      <LearningJourney coursesAvailable={coursesAvailable} />
 
       {result.limits.filesProcessed > 0 && (
-        <section className="w-full space-y-xs px-sm">
+        <section className="w-full min-w-0 space-y-xs px-sm">
           <h3 className="font-headline-md text-headline-md text-on-surface">{summary.headline}</h3>
-          <p className="text-[14px] text-on-surface-variant leading-relaxed max-w-3xl">
+          <p className="w-full min-w-0 text-[14px] text-on-surface-variant leading-relaxed max-w-3xl">
             {summary.body}
           </p>
         </section>
@@ -207,28 +213,36 @@ export function AnalysisResultsView({ result, onNewAnalysis }: Props) {
             <span className="text-xl" aria-hidden>
               🗺️
             </span>
-            Mapa de misiones por área
+            Hallazgos por área
           </h3>
           <p className="text-[14px] text-on-surface-variant mt-xs w-full max-w-3xl leading-relaxed">
-            Cada tarjeta es un tipo de riesgo. Tocala para aprender qué encontramos y cómo
-            corregirlo, sin necesidad de ser programador.
+            Cada tarjeta agrupa un tipo de riesgo. Usá Resumen para ver los detalles y Aprendizaje
+            para el minicurso interactivo.
           </p>
         </div>
 
         {categories.length === 0 && result.limits.filesProcessed > 0 ? (
-          <div className="py-xl text-center rounded-xl border border-outline-variant bg-surface-container-low">
+          <div className="w-full min-w-0 py-xl px-md text-center rounded-xl border border-outline-variant bg-surface-container-low">
             <span className="text-5xl mb-md block" aria-hidden>
               🏆
             </span>
             <p className="text-on-surface font-headline-md">¡Sin misiones pendientes!</p>
-            <p className="text-on-surface-variant text-[14px] mt-xs w-full max-w-md mx-auto">
+            <p className="text-on-surface-variant text-[14px] mt-xs max-w-lg mx-auto leading-relaxed">
               Tu escudo se ve sólido. Volvé a escanear cuando hagas cambios grandes.
             </p>
           </div>
         ) : (
           <div className="space-y-md">
             {categories.map((cat, index) => (
-              <CategoryAccordion key={cat.owaspId} category={cat} defaultOpen={index === 0} />
+              <CategoryAccordion
+                key={cat.owaspId}
+                category={cat}
+                defaultOpen={index === 0}
+                analysisId={analysisId}
+                learningPremium={learningPremium}
+                learningModule={learningModules[cat.owaspId]}
+                userScope={userScope}
+              />
             ))}
           </div>
         )}
