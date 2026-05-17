@@ -1,21 +1,10 @@
 import { z } from "zod";
 
-export const SeveritySchema = z.enum(["low", "medium", "high"]);
-export type Severity = z.infer<typeof SeveritySchema>;
+import { CategoryLearningModuleSchema } from "./learning.js";
+import { OwaspIdSchema, SeveritySchema } from "./owasp.js";
 
-export const OwaspIdSchema = z.enum([
-  "A01",
-  "A02",
-  "A03",
-  "A04",
-  "A05",
-  "A06",
-  "A07",
-  "A08",
-  "A09",
-  "A10",
-]);
-export type OwaspId = z.infer<typeof OwaspIdSchema>;
+export { OwaspIdSchema, SeveritySchema };
+export type { OwaspId, Severity } from "./owasp.js";
 
 export const TrafficLightSchema = z.enum(["green", "yellow", "red"]);
 export type TrafficLight = z.infer<typeof TrafficLightSchema>;
@@ -52,6 +41,12 @@ export const AnalysisLimitsSchema = z.object({
 });
 export type AnalysisLimits = z.infer<typeof AnalysisLimitsSchema>;
 
+export const LearningMetaSchema = z.object({
+  generatedCount: z.number().int().min(0),
+  eligibleCount: z.number().int().min(0),
+  skippedReason: z.enum(["no_api_key", "no_eligible_categories"]).optional(),
+});
+
 export const AnalysisResultSchema = z.object({
   riskScore: z.number().min(0).max(100),
   secureScore: z.number().min(0).max(100),
@@ -73,6 +68,9 @@ export const AnalysisResultSchema = z.object({
   limits: AnalysisLimitsSchema,
   usedAiExplanation: z.boolean(),
   markdownReport: z.string(),
+  learningPremium: z.boolean(),
+  learningModules: z.record(OwaspIdSchema, CategoryLearningModuleSchema),
+  learningMeta: LearningMetaSchema,
 });
 export type AnalysisResult = z.infer<typeof AnalysisResultSchema>;
 

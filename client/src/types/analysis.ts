@@ -1,4 +1,5 @@
 import type { Finding, OwaspId, Severity } from "../components/FindingCard";
+import type { CategoryLearningModule } from "./learning";
 
 export type TrafficLight = "green" | "yellow" | "red";
 
@@ -16,6 +17,12 @@ export type OwaspCategory = {
   findings: Finding[];
 };
 
+export type LearningMeta = {
+  generatedCount: number;
+  eligibleCount: number;
+  skippedReason?: "no_api_key" | "no_eligible_categories";
+};
+
 export type AnalysisResult = {
   riskScore: number;
   secureScore: number;
@@ -30,4 +37,7 @@ export type AnalysisResult = {
   };
   usedAiExplanation: boolean;
   markdownReport?: string;
+  learningPremium: boolean;
+  learningModules: Partial<Record<OwaspId, CategoryLearningModule>>;
+  learningMeta?: LearningMeta;
 };
