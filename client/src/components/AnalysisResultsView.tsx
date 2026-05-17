@@ -5,6 +5,7 @@ import { LearningJourney } from "./LearningJourney";
 import { MissionSummary } from "./MissionSummary";
 import { SecurityScoreHero } from "./SecurityScoreHero";
 import type { AnalysisResult } from "../types/analysis";
+import { downloadMarkdownReport } from "../util/downloadMarkdownReport";
 import type { Finding, OwaspId, Severity } from "./FindingCard";
 
 export type { AnalysisResult, OwaspCategory, TrafficLight } from "../types/analysis";
@@ -75,6 +76,12 @@ export function AnalysisResultsView({ result, onNewAnalysis }: Props) {
   const totalFindings = result.findings.length;
   const { urgent, important, minor } = countBySeverity(result);
   const summary = summaryCopy(result, totalFindings, urgent);
+  const markdownReport = result.markdownReport?.trim();
+
+  function handleDownloadReport() {
+    if (!markdownReport) return;
+    downloadMarkdownReport(markdownReport);
+  }
 
   const categories = useMemo(() => {
     if (result.categories.length > 0) return result.categories;
@@ -120,14 +127,29 @@ export function AnalysisResultsView({ result, onNewAnalysis }: Props) {
           </span>
           Nuevo escaneo
         </button>
-        {result.usedAiExplanation && (
-          <span className="text-[12px] text-on-surface-variant flex items-center gap-xs">
-            <span className="material-symbols-outlined text-[16px] text-primary" data-icon="auto_awesome">
-              auto_awesome
+        <div className="flex flex-wrap items-center gap-sm">
+          {markdownReport && (
+            <button
+              type="button"
+              onClick={handleDownloadReport}
+              className="flex items-center gap-xs bg-primary text-on-primary px-md py-xs rounded-lg text-[13px] font-bold hover:opacity-90 transition-opacity"
+              title="Descargá el reporte y pegalo en Cursor, Copilot u otro asistente con acceso a tu proyecto"
+            >
+              <span className="material-symbols-outlined text-[18px]" data-icon="download">
+                download
+              </span>
+              Exportar reporte para IA
+            </button>
+          )}
+          {result.usedAiExplanation && (
+            <span className="text-[12px] text-on-surface-variant flex items-center gap-xs">
+              <span className="material-symbols-outlined text-[16px] text-primary" data-icon="auto_awesome">
+                auto_awesome
+              </span>
+              Explicaciones personalizadas con IA
             </span>
-            Explicaciones personalizadas con IA
-          </span>
-        )}
+          )}
+        </div>
       </div>
 
       <SecurityScoreHero

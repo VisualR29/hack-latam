@@ -9,6 +9,14 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js'
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
 
+/** URL pública de la app (producción). Si no está definida, usa el origen actual del navegador. */
+export function getAuthRedirectUrl(): string {
+  const fromEnv = (import.meta.env.VITE_APP_URL ?? "").trim().replace(/\/+$/, "");
+  if (fromEnv) return fromEnv;
+  if (typeof window !== "undefined") return window.location.origin;
+  return "";
+}
+
 export const supabase: SupabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
 
 // ==================== TIPOS ====================
@@ -121,7 +129,7 @@ export async function signInWithGitHub() {
       queryParams: {
         scope: 'read:user user:email repo',
       },
-      redirectTo: window.location.origin,
+      redirectTo: getAuthRedirectUrl(),
     },
   })
   if (error) throw error
